@@ -18,7 +18,7 @@ ANALYSIS PIPELINE:      COMPLETE — tables, figures, sensitivity and control an
 FULL PANGRAM INFERENCE: NOT RUN — blocked by API key, recorded source gaps, coverage completion, and rights/approval review
 ```
 
-- RESEARCH RECONNAISSANCE: partial; primary Economist method disclosure is still inaccessible
+- RESEARCH RECONNAISSANCE: substantially advanced 2026-09-24; the article body was recovered through a syndicated reprint, which confirms Pangram as the detector and a word-weighted UK headline metric; the Pangram model, thresholds, date range, speech definition, and any source note, code, or data release remain unavailable, so this stays a comparative extension, not a replication ([ledger](docs/economist_replication.md))
 - FRANCE ARCHIVE COLLECTION: official 15th–17th legislature Syceron ZIPs were downloaded and checksum-verified locally; they are not in Git and must be downloaded in a fresh clone
 - FRANCE PARSING/NORMALIZATION: current local rebuild emitted 1,243,606 intervention records / 75,392,623 words through 2026-07-21; disk-backed full-file audit passed, but found 389,687 repeated text hashes, mostly formulaic short turns. Random source-boundary QA remains outstanding.
 - FRANCE QA: 0 duplicate speech IDs, 0 empty records, and 0 missing provenance fields in the streamed check; one official webpage sample was manually compared; full manual sampling, text-boundary audit, duplicate-text review, and review of an over-10,000-word record remain outstanding

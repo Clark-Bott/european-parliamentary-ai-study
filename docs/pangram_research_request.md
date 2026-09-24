@@ -4,7 +4,7 @@
 
 How has the prevalence of AI-generated or AI-assisted text in parliamentary interventions changed since widespread generative AI, and how does it compare across major European legislatures?
 
-The project was inspired by The Economist's September 2026 article “AI-written speeches are taking over politics.” Its public page and accessible metadata establish the topic, but its detailed methodology, source notes, and detector configuration have not been recovered. This project is a transparent comparative extension, not an exact replication.[1][17]
+The project was inspired by The Economist's September 2026 article “AI-written speeches are taking over politics.” A syndicated reprint of the article body confirms that The Economist used Pangram and reported a word-weighted AI share for UK debates, but the Pangram model selector, thresholds, date range, speech definition, and any source note remain unrecovered. This project is a transparent comparative extension, not an exact replication; knowing The Economist's configuration would let us report comparable figures.[25][17]
 
 ## Countries and work completed
 
@@ -29,3 +29,11 @@ Once the remaining corpora and country QA are complete, research credits/API acc
 ## Current blockers
 
 This is **not yet** a claim that “the dataset, methodology, API integration, and analysis pipeline are all built.” Germany, France, Italy, the Netherlands, and Spain have local parsed corpora and disk-backed integrity audits, not complete random source-boundary sign-offs. Germany has an unresolved post-cutoff interval, Spain has a resolved PDF fallback but still needs random boundary and reuse review, and Poland is still downloading. Dutch corrected-final coverage is reconciled. The [rights and processing review](rights_and_processing_review.md) leaves Italy, Spain, Poland, Pangram API retention, and international-transfer terms unresolved; no paid processing approval file exists. Full cross-country acquisition, quality review, and random source-boundary validation remain necessary. Pangram API access was intentionally not used; the default dry run uses clearly labeled synthetic fixtures only.
+
+## Sources
+
+[1] https://biztoc.com/x/d5f103685ea36fdb — Economist story metadata mirror
+[2] https://docs.pangram.com/api-reference/ai-detection — Pangram AI Detection API
+[3] https://www.pangram.com/pricing?category=developers — Pangram developer pricing
+[17] https://www.economist.com/britain/2026/09/23/ai-written-speeches-are-taking-over-politics — official article page
+[25] https://www.hindustantimes.com/world-news/aiwritten-speeches-are-taking-over-politics-101790241476569.html — syndicated full-text reprint of the article

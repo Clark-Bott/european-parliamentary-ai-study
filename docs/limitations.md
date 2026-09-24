@@ -1,6 +1,6 @@
 # Limitations and interpretation
 
-1. **Primary article methods are not recovered.** The accessible *Economist* reference is a story metadata mirror, not the article's source notes, data, or methods. This project must not market itself as an exact replication unless primary evidence is later recovered.[1]
+1. **Primary article methods are only partly recovered.** The article body is available through a syndicated reprint, so the detector (Pangram) and the headline metric (word-weighted AI share) are confirmed. The Pangram model and thresholds, the date range, the speech definition, the mixed-text treatment, and any source note, code, or data release are still unavailable.[25][17] This project must not market itself as an exact replication.
 2. **Detector uncertainty.** Pangram classifications are probabilistic outputs, not proof of authorship, deliberate AI use, or a named member's personal behavior. Staff, researchers, party offices, human editing, and mixed workflows may contribute to a speech.
 3. **Language comparability.** Six languages and institutional transcription conventions differ. A single commercial detector may have different calibration and error rates by language, register, and historical period. Language-specific historical controls and manual validation are essential, but cannot establish ground truth.
 4. **Selection and coverage.** Full official archives can omit committee speech, informal exchange, or periods with different recording practices; daily files can change after correction. Country/year comparisons are only defensible after coverage is measured.
@@ -16,3 +16,5 @@ Use phrasing such as “Pangram classified an estimated share of these words as 
 
 [1] https://biztoc.com/x/d5f103685ea36fdb — Economist story metadata mirror
 [3] https://www.pangram.com/pricing?category=developers — Pangram developer pricing
+[17] https://www.economist.com/britain/2026/09/23/ai-written-speeches-are-taking-over-politics — official article page
+[25] https://www.hindustantimes.com/world-news/aiwritten-speeches-are-taking-over-politics-101790241476569.html — syndicated full-text reprint of the article

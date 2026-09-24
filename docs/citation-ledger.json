@@ -144,6 +144,48 @@
       "url": "https://doi.org/10.5281/zenodo.22844952",
       "title": "Corpus der Plenarprotokolle des Deutschen Bundestages (CPP-BT), version 2026-09-19, CC0",
       "accessed": "2026-09-24"
+    },
+    {
+      "id": 25,
+      "url": "https://www.hindustantimes.com/world-news/aiwritten-speeches-are-taking-over-politics-101790241476569.html",
+      "title": "Syndicated full-text reprint of The Economist article AI-written speeches are taking over politics",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 26,
+      "url": "https://arxiv.org/abs/2606.14209",
+      "title": "Suvanto et al., Detecting undisclosed LLM-generated content in parliamentary texts",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 27,
+      "url": "https://www.chalmers.se/en/current/news/me-mps-are-using-ai-to-help-write-parliamentary-motions-without-disclosing-it/",
+      "title": "Chalmers press release with per-year UK and Swedish detection figures",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 28,
+      "url": "https://theeconomistoffthecharts.substack.com/p/how-to-spot-ai-writing",
+      "title": "The Economist Off the Charts, How to spot AI writing, 2026-08-08",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 29,
+      "url": "https://originality.ai/blog/likely-ai-language-congressional-record",
+      "title": "Originality.AI, Likely AI Language Surged Across the Congressional Record",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 30,
+      "url": "https://nltimes.nl/2026/09/12/key-defense-speeches-year-appear-fully-ai-generated-analysis",
+      "title": "NL Times, key defense speeches appear fully AI-generated, Pangram analysis",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 31,
+      "url": "https://www.pimlicojournal.co.uk/p/mps-are-almost-certainly-using-chatgpt",
+      "title": "Pimlico Journal, phrase-frequency analysis of Hansard",
+      "accessed": "2026-09-24"
     }
   ]
 }

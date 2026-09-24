@@ -1,6 +1,6 @@
 # Proposed study methodology (version 0.1)
 
-This document is a transparent pre-analysis plan for the requested cross-country extension. It is not a claim that the choices reproduce *The Economist*'s undisclosed method. See [`economist_replication.md`](economist_replication.md) for the evidence ledger.
+This document is a transparent pre-analysis plan for the requested cross-country extension. It is not a claim that the choices reproduce *The Economist*'s method. The recovered article body confirms two anchors — Pangram as detector and word-weighted AI share as the headline metric — while model selector, thresholds, date range, and speech definition stay undisclosed, and this plan uses its own explicit choices for them. See [`economist_replication.md`](economist_replication.md) for the evidence ledger.
 
 ## Estimand and unit
 
