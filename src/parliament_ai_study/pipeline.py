@@ -90,19 +90,17 @@ def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str) -> None:
         periods = ["no data"]
     palette = ["#3569a8", "#d45e36", "#32876b", "#8b62a9", "#d09b27", "#4b8e9d"]
     plot_width, plot_height = width - left - right, height - top - bottom
-    points = {row["country"]: {row["period"]: float(row["ai_word_share"])
-                               for row in groups if row["country"] == row["country"]}
-              for row in groups}
-    # The last comprehension intentionally creates country dictionaries; populate full keys below.
     points = {country: {} for country in countries}
     for row in groups:
         points[row["country"]][row["period"]] = float(row["ai_word_share"])
+    maximum = max((float(row["ai_word_share"]) for row in groups), default=0.0)
+    ceiling = max(0.05, min(1.0, maximum * 1.15))
     elements = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
                 '<rect width="100%" height="100%" fill="white"/>',
                 f'<text x="{left}" y="25" font-family="sans-serif" font-size="18" font-weight="bold">{html.escape(title)}</text>']
     for tick in range(0, 6):
         y = top + plot_height * tick / 5
-        label = f"{1 - tick / 5:.0%}"
+        label = f"{ceiling * (1 - tick / 5):.1%}"
         elements.append(f'<line x1="{left}" y1="{y:.1f}" x2="{width-right}" y2="{y:.1f}" stroke="#ddd"/>')
         elements.append(f'<text x="{left-10}" y="{y+4:.1f}" text-anchor="end" font-size="11" font-family="sans-serif">{label}</text>')
     for pi, period_value in enumerate(periods):
@@ -115,8 +113,8 @@ def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str) -> None:
             if period_value not in points[country]:
                 continue
             x = left if len(periods) == 1 else left + plot_width * pi / (len(periods) - 1)
-            value = max(0.0, min(1.0, points[country][period_value]))
-            y = top + plot_height * (1 - value)
+            value = max(0.0, min(ceiling, points[country][period_value]))
+            y = top + plot_height * (1 - value / ceiling)
             pts.append((x, y))
         if pts:
             coords = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
@@ -154,11 +152,19 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
     annual = periods["year"]
     baseline = [row for row in annual if 2018 <= int(row["period"]) <= 2021]
     _write_csv(tables / "historical_baseline.csv", baseline)
-    pre_post = []
+    pre_post_groups: dict[tuple[str, str], dict[str, float]] = {}
     for row in annual:
         year = int(row["period"])
-        pre_post.append({**row, "period_group": "pre-LLM control" if year <= 2021 else
-                         ("transition" if year == 2022 else "post-ChatGPT" if year >= 2023 else "out of range")})
+        group_name = "pre-LLM control" if year <= 2021 else "transition" if year == 2022 else "post-ChatGPT"
+        group = pre_post_groups.setdefault((row["country"], group_name),
+                                           {"speeches": 0, "words": 0, "ai_words_estimate": 0.0,
+                                            "mixed_words_estimate": 0.0})
+        for field in group:
+            group[field] += row[field]
+    pre_post = [{"country": country, "period_group": label, **values,
+                 "ai_word_share": values["ai_words_estimate"] / values["words"],
+                 "ai_plus_mixed_word_share": (values["ai_words_estimate"] + values["mixed_words_estimate"]) / values["words"]}
+                for (country, label), values in sorted(pre_post_groups.items()) if values["words"]]
     _write_csv(tables / "pre_post_comparison.csv", pre_post)
     _write_svg(figures / "all_countries.svg", periods["month"],
                title="Pangram-classified AI-generated word share by month" + (" (MOCKED)" if mocked else ""))
@@ -211,6 +217,11 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
     qa = validate_corpus(speeches)
     if qa["errors"]:
         raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
+    if not dry_run:
+        missing = [f"{country}:{year}" for country in COUNTRIES for year in range(2018, 2027)
+                   if year != 2026 and not qa["country_year_counts"].get(f"{country}:{year}")]
+        if missing:
+            raise ValueError("paid six-country run requires country/year coverage; missing " + ", ".join(missing))
     estimate = estimate_cost(speeches, price_per_1000_words=price_per_1000_words)
     print(f"Corpus: {len(speeches)} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
     if dry_run:

@@ -270,6 +270,19 @@ class PangramClientTests(unittest.TestCase):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_paid_mode_refuses_incomplete_corpus_before_any_network_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            corpus = base / "only-one-country.jsonl"
+            write_jsonl(corpus, [{"country": "France", "date": "2024-01-01", "word_count": 40,
+                                 "speech_id": "one", "speech_text": "Bonjour " * 40,
+                                 "source_identifier": "one", "source_url": "https://example.test/one"}])
+            with self.assertRaisesRegex(ValueError, "country/year coverage"):
+                run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
+                             confirm_paid_run=True, api_key="fake-key", model="pangram-4",
+                             price_per_1000_words=0.5)
+            self.assertFalse((base / "out/raw_pangram").exists())
+
     def test_mock_dry_run_creates_outputs_for_all_six_countries(self):
         with tempfile.TemporaryDirectory() as directory:
             summary = run_pipeline(
