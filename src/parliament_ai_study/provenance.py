@@ -137,7 +137,8 @@ def reconcile_source_manifest(raw_dir: str | Path = "data/raw",
     current: dict[str, dict[str, Any]] = {}
     unresolved: list[dict[str, str]] = []
     files = sorted(path for path in raw.rglob("*")
-                   if path.is_file() and not path.name.endswith(".tmp"))
+                   if path.is_file() and path.name != ".gitkeep"
+                   and not path.name.endswith(".tmp"))
     for path in files:
         relative = path.relative_to(raw).as_posix()
         local_path = path.as_posix()
