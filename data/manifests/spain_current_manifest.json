@@ -1,19 +1,26 @@
 {
   "country": "Spain",
   "output": "data/processed/spain_speeches.jsonl",
-  "sha256": "49b95c8dbe0b7e2a130d8c86f098dc3604f5ee42725404ff02fdad7130190323",
-  "bytes": 438253629,
+  "sha256": "809314070304f8f343961ca09a80dea7b4a493e22a844502dd08d5058dca082b",
+  "bytes": 439151534,
   "retrieval_date": "2026-09-24",
-  "records": 100669,
-  "words": 28046062,
-  "parsed_journals": 581,
-  "unavailable_html_journal_numbers": 2,
+  "records": 101069,
+  "words": 28091299,
+  "parsed_journals": 583,
+  "pdf_fallback_journals": 2,
+  "unavailable_html_journal_numbers": 0,
   "eligible_min_words": 40,
-  "eligible_records": 50021,
-  "eligible_words": 27234410,
-  "billable_units_100_words": 296262,
-  "list_price_usd_at_0_05_per_unit": 14813.10,
+  "eligible_records": 50197,
+  "eligible_words": 27276966,
+  "billable_units_100_words": 296769,
+  "list_price_usd_at_0_05_per_unit": 14838.45,
   "duplicate_speech_ids": 0,
-  "duplicate_text_hashes_all_lengths": 15385,
-  "note": "DSCD-12-PL-162 and DSCD-14-PL-59 exist as official PDFs but the numbered HTML lookup returns no textoCompleto. Both are unresolved and block paid submission. File audit does not validate all source boundaries or reuse rights; corpus is Git-ignored."
+  "duplicate_text_hashes_all_lengths": 15462,
+  "coverage_audit": "data/manifests/spain_coverage_audit.json",
+  "pdf_parser": "pypdf-6.1.1-coordinate-v1",
+  "pdf_fallback_sha256": {
+    "DSCD-12-PL-162.PDF": "1dc99c22aeb70cbade915c4b0e86d988d1af3e5d3ab20a365f754a99fa7d3374",
+    "DSCD-14-PL-59.PDF": "b69d7d39c79cf15463d662ce49a8d835fcd576b2060a25ba26f86a72572aa4b3"
+  },
+  "note": "The two journals without usable HTML were recovered from official PDFs with the pypdf coordinate parser: DSCD-12-PL-162 produced 252 turns and DSCD-14-PL-59 produced 148. Fourteen records exceed 10,000 words and require review. File audit does not validate all source boundaries or reuse rights; corpus is Git-ignored."
 }

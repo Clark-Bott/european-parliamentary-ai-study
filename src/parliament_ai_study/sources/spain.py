@@ -14,6 +14,7 @@ import re
 from ..io import write_jsonl
 from ..models import Speech
 from .download import download_file, fetch_bytes
+from .spain_pdf import parse_congreso_pdf
 
 BASE = "https://www.congreso.es"
 _TURN = re.compile(r"^[ \t]*(?:La señora|El señor)\s+([A-ZÁÉÍÓÚÜÑÀÈÌÒÙÇ][^:\n]{1,105}):\s*", re.M)
@@ -25,6 +26,10 @@ def journal_url(term: int, number: int) -> str:
     return (f"{BASE}/busqueda-de-intervenciones?p_p_id=intervenciones&p_p_lifecycle=0&"
             "p_p_state=normal&p_p_mode=view&_intervenciones_mode=mostrarTextoIntegro&"
             f"_intervenciones_legislatura={roman}&_intervenciones_id_texto=(DSCD-{term}-PL-{number}.CODI.)")
+
+
+def pdf_journal_url(term: int, number: int) -> str:
+    return f"{BASE}/public_oficiales/L{term}/CONG/DS/PL/DSCD-{term}-PL-{number}.PDF"
 
 
 class _Journal(HTMLParser):
@@ -129,10 +134,33 @@ def _last_journal(term: int) -> int:
     return low
 
 
+def audit_congreso_raw_coverage(raw_dir: str | Path = "data/raw") -> dict:
+    """Summarize downloaded Diario HTML/PDF files and remaining unresolved journals."""
+    terms = []
+    for term in (12, 13, 14, 15):
+        directory = Path(raw_dir) / "spain" / f"term-{term}"
+        numbers = sorted(int(path.stem.rsplit("-", 1)[1]) for path in directory.glob("DSCD-*-PL-*.html"))
+        if not numbers:
+            terms.append({"term": term, "html_files": 0, "first": None, "last": None,
+                          "expected_range": 0, "missing_html_numbers": []})
+            continue
+        expected = set(range(min(numbers), max(numbers) + 1))
+        terms.append({
+            "term": term, "html_files": len(numbers), "first": min(numbers), "last": max(numbers),
+            "expected_range": len(expected), "missing_html_numbers": sorted(expected - set(numbers)),
+            "html_full_text_files": sum(b'class="textoCompleto"' in path.read_bytes()
+                                        for path in directory.glob("DSCD-*-PL-*.html")),
+        })
+    pdf_dir = Path(raw_dir) / "spain" / "pdf-fallback"
+    pdfs = sorted(path.name for path in pdf_dir.glob("DSCD-*-PL-*.PDF"))
+    return {"terms": terms, "pdf_fallback_files": pdfs,
+            "note": "Raw-file audit only; it does not replace official index reconciliation or random boundary review."}
+
+
 def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                           raw_dir: str | Path = "data/raw",
                           manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int]:
-    counts = {"records": 0, "words": 0, "journals": 0}
+    counts = {"records": 0, "words": 0, "journals": 0, "pdf_fallback_journals": 0}
     gaps: list[dict[str, str | int]] = []
 
     def rows():
@@ -160,12 +188,27 @@ def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, en
                 if not path.exists():
                     download_file(url, path, manifest_path=manifest_path)
                 contents = path.read_bytes()
-                if b'class="textoCompleto"' not in contents:
-                    gaps.append({"term": term, "number": number, "url": url,
-                                 "reason": "numbered official journal lookup returned no full text"})
-                    continue
-                speeches = parse_congreso_html(contents, source_url=url, term=term, number=number)
-                if not start_year <= int(speeches[0].date[:4]) <= end_year:
+                source_url = url
+                if b'class="textoCompleto"' in contents:
+                    speeches = parse_congreso_html(contents, source_url=source_url,
+                                                   term=term, number=number)
+                else:
+                    pdf_path = Path(raw_dir) / "spain" / "pdf-fallback" / f"DSCD-{term}-PL-{number}.PDF"
+                    if not pdf_path.exists():
+                        download_file(pdf_journal_url(term, number), pdf_path,
+                                      manifest_path=manifest_path,
+                                      headers={"User-Agent": "Mozilla/5.0", "Referer": f"{BASE}/"})
+                    try:
+                        source_url = pdf_journal_url(term, number)
+                        speeches = parse_congreso_pdf(pdf_path.read_bytes(), source_url=source_url,
+                                                      term=term, number=number)
+                        counts["pdf_fallback_journals"] += 1
+                    except Exception as exc:
+                        gaps.append({"term": term, "number": number, "url": source_url,
+                                     "reason": "official PDF fallback could not be parsed",
+                                     "error": f"{type(exc).__name__}: {exc}"})
+                        continue
+                if not speeches or not start_year <= int(speeches[0].date[:4]) <= end_year:
                     continue
                 counts["journals"] += 1
                 for speech in speeches:
@@ -177,5 +220,9 @@ def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, en
     report = Path(manifest_path).parent / "spain_unavailable_journals.json"
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps(gaps, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    coverage_path = report.parent / "spain_coverage_audit.json"
+    coverage_path.write_text(json.dumps(audit_congreso_raw_coverage(raw_dir), ensure_ascii=False, indent=2) + "\n",
+                             encoding="utf-8")
     counts["unavailable_journal_numbers"] = len(gaps)
+    counts["coverage_audit"] = str(coverage_path)
     return counts

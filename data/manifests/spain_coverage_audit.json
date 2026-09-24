@@ -1,0 +1,45 @@
+{
+  "terms": [
+    {
+      "term": 12,
+      "html_files": 88,
+      "first": 99,
+      "last": 186,
+      "expected_range": 88,
+      "missing_html_numbers": [],
+      "html_full_text_files": 87
+    },
+    {
+      "term": 13,
+      "html_files": 15,
+      "first": 1,
+      "last": 15,
+      "expected_range": 15,
+      "missing_html_numbers": [],
+      "html_full_text_files": 15
+    },
+    {
+      "term": 14,
+      "html_files": 275,
+      "first": 1,
+      "last": 275,
+      "expected_range": 275,
+      "missing_html_numbers": [],
+      "html_full_text_files": 274
+    },
+    {
+      "term": 15,
+      "html_files": 205,
+      "first": 1,
+      "last": 205,
+      "expected_range": 205,
+      "missing_html_numbers": [],
+      "html_full_text_files": 205
+    }
+  ],
+  "pdf_fallback_files": [
+    "DSCD-12-PL-162.PDF",
+    "DSCD-14-PL-59.PDF"
+  ],
+  "note": "Raw-file audit only; it does not replace official index reconciliation or random boundary review."
+}
