@@ -3,10 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from http.client import IncompleteRead
+from zipfile import ZipFile
 
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
-from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links, list_protocols
+from parliament_ai_study.sources.germany import (CPP_BT_MEMBER, iter_cpp_bt_speeches,
+                                               list_protocols, parse_bundestag_xml, _Links)
 from parliament_ai_study.sources.italy import build_camera_corpus, parse_camera_html, parse_camera_xml
 from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml, iter_tweede_kamer_speeches, _odata_pages
 from unittest.mock import patch
@@ -193,6 +195,23 @@ class ManifestTests(unittest.TestCase):
 
 
 class BundestagParserTests(unittest.TestCase):
+    def test_cpp_bt_archive_normalizes_speech_metadata_and_skips_empty_text(self):
+        fixture = Path(__file__).parent / "fixtures" / CPP_BT_MEMBER
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "speeches.zip"
+            with ZipFile(archive, "w") as bundle:
+                bundle.write(fixture, CPP_BT_MEMBER)
+            rows = list(iter_cpp_bt_speeches(archive))
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row.speech_id, "ID1900100100")
+        self.assertEqual(row.date, "2018-01-10")
+        self.assertEqual(row.speaker_id, "11001001")
+        self.assertEqual(row.speaker_name, "Dr. Erika Example")
+        self.assertEqual(row.party, "CDU/CSU")
+        self.assertEqual(row.speech_text, "Vielen Dank, Herr Präsident. (Beifall)")
+        self.assertIn("zenodo.18177196", row.source_url)
+
     def test_protocol_list_uses_official_limit_and_html_headers(self):
         requests = []
         def fake_page(url):

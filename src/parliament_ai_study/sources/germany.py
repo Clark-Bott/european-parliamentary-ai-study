@@ -1,12 +1,16 @@
 """Bundestag official Open Data XML (19th through 21st electoral terms)."""
 from __future__ import annotations
 
+from collections.abc import Iterator
+import csv
 from datetime import datetime
 from html.parser import HTMLParser
+import io
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
+from zipfile import ZipFile
 
 from ..io import write_jsonl
 from ..models import Speech
@@ -15,6 +19,12 @@ from .download import download_file, fetch_bytes
 BASE = "https://www.bundestag.de"
 # IDs are the XML-only document lists on the Bundestag's Open Data page.
 LIST_IDS = {19: "543410-543410", 20: "866354-866354", 21: "1058442-1058442"}
+CPP_BT_ARCHIVE = "CPP-BT_2026-01-17_DE_CSV_Reden_Gesamt.zip"
+CPP_BT_URL = ("https://zenodo.org/api/records/18177196/files/"
+              "CPP-BT_2026-01-17_DE_CSV_Reden_Gesamt.zip/content")
+CPP_BT_MEMBER = "CPP-BT_2026-01-17_DE_CSV_Reden_Gesamt.csv"
+CPP_BT_MD5 = "9b03325c65c6930bc5e44d4206ce3d42"
+CPP_BT_DOI = "10.5281/zenodo.18177196"
 LIST_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Referer": f"{BASE}/services/opendata",
@@ -63,6 +73,55 @@ def list_protocols(term: int) -> list[str]:
     raise ValueError(f"protocol list for term {term} exceeded pagination limit")
 
 
+def _none_or_value(value: object) -> str:
+    return "" if value in (None, "NA", "") else str(value)
+
+
+def iter_cpp_bt_speeches(archive: str | Path, *, start_year: int = 2018,
+                         end_year: int = 2026) -> Iterator[Speech]:
+    """Normalize the verified CC0 CPP-BT speech-level CSV archive."""
+    with ZipFile(archive) as bundle:
+        names = bundle.namelist()
+        member = CPP_BT_MEMBER if CPP_BT_MEMBER in names else next(
+            name for name in names if name.endswith(".csv"))
+        with bundle.open(member) as raw:
+            for row in csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8", newline="")):
+                try:
+                    year = int(row["sitzung_jahr"])
+                    term = int(row["wahlperiode"])
+                    sitting = int(row["sitzung_nr"])
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ValueError(f"invalid CPP-BT speech metadata in {member}") from exc
+                if not start_year <= year <= end_year:
+                    continue
+                text = _none_or_value(row.get("rede_text")).strip()
+                speech_id = _none_or_value(row.get("rede_id"))
+                if not text or not speech_id:
+                    continue
+                title = _none_or_value(row.get("redner_titel"))
+                first = _none_or_value(row.get("redner_vorname"))
+                last = _none_or_value(row.get("redner_nachname"))
+                suffix = _none_or_value(row.get("redner_namenszusatz"))
+                place = _none_or_value(row.get("redner_ortszusatz"))
+                name = " ".join(part for part in (title, first, last, suffix, place) if part)
+                day = datetime.strptime(row["sitzung_datum"], "%Y-%m-%d").date().isoformat()
+                source_url = f"https://doi.org/{CPP_BT_DOI}#{speech_id}"
+                yield Speech(
+                    country="Germany", parliament="Bundestag", chamber="Bundestag",
+                    date=day, session_id=f"bundestag-{term}-{sitting}",
+                    speech_id=speech_id,
+                    speaker_id=_none_or_value(row.get("redner_id")),
+                    speaker_name=name or "Unknown speaker",
+                    party=_none_or_value(row.get("redner_fraktion")),
+                    speaker_role=(_none_or_value(row.get("redner_rolle_lang"))
+                                 or _none_or_value(row.get("redner_rolle_kurz"))),
+                    legislative_term=str(term), speech_text=text, raw_text=text,
+                    source_url=source_url, source_identifier=speech_id,
+                    source_type="cpp_bt_cc0_speech_csv", text_language="de",
+                    cleaning_notes=("CPP-BT already removes official speaker headers and audience comments; "
+                                    f"raw_text and speech_text preserve its cleaned text. DOI {CPP_BT_DOI}."))
+
+
 def _text_without_annotations(node: ET.Element) -> str:
     parts = [node.text or ""]
     for child in node:
@@ -109,9 +168,16 @@ def parse_bundestag_xml(data: bytes | str, *, source_url: str) -> list[Speech]:
 def build_bundestag_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                            raw_dir: str | Path = "data/raw",
                            manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int]:
-    counts = {"records": 0, "words": 0, "protocols": 0}
+    counts = {"records": 0, "words": 0, "protocols": 0,
+              "cpp_bt_records": 0, "official_xml_records": 0}
 
     def rows():
+        archive = Path(raw_dir) / "germany" / "cpp-bt" / CPP_BT_ARCHIVE
+        for speech in iter_cpp_bt_speeches(archive, start_year=start_year, end_year=end_year):
+            counts["records"] += 1
+            counts["words"] += speech.word_count
+            counts["cpp_bt_records"] += 1
+            yield speech.to_dict()
         for term in LIST_IDS:
             for url in list_protocols(term):
                 filename = Path(urlparse(url).path).name
@@ -128,6 +194,7 @@ def build_bundestag_corpus(output_path: str | Path, *, start_year: int = 2018, e
                 for speech in speeches:
                     counts["records"] += 1
                     counts["words"] += speech.word_count
+                    counts["official_xml_records"] += 1
                     yield speech.to_dict()
 
     write_jsonl(output_path, rows())
