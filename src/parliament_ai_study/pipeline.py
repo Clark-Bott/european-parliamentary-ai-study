@@ -208,10 +208,36 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
             "errors": qa["errors"], "warnings": qa["warnings"], "results_dir": str(results_dir)}
 
 
+def validate_processing_approval(path: str | Path) -> dict[str, Any]:
+    """Require a recorded human approval for source and processor terms."""
+    approval_path = Path(path)
+    if not approval_path.is_file():
+        raise PermissionError(f"paid processing requires an approval record: {approval_path}")
+    try:
+        approval = json.loads(approval_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise PermissionError(f"cannot read processing approval: {approval_path}") from exc
+    required = {
+        "approved": True,
+        "source_terms_reviewed": True,
+        "processor_terms_reviewed": True,
+        "international_transfer_reviewed": True,
+    }
+    missing = [key for key, value in required.items() if approval.get(key) is not value]
+    for key in ("approved_by", "approved_at_utc", "scope"):
+        if not str(approval.get(key, "")).strip():
+            missing.append(key)
+    if missing:
+        raise PermissionError(
+            f"processing approval {approval_path} is incomplete: " + ", ".join(missing))
+    return approval
+
+
 def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  dry_run: bool, price_per_1000_words: float, model: str,
                  confirm_paid_run: bool = False, api_key: str | None = None,
-                 gap_reports: str | Path | Iterable[str | Path] | None = None) -> dict[str, Any]:
+                 gap_reports: str | Path | Iterable[str | Path] | None = None,
+                 processing_approval: str | Path | None = None) -> dict[str, Any]:
     """Run the deterministic mock workflow or authorized Pangram inference."""
     target = Path(results_dir)
     synthetic = False
@@ -250,6 +276,8 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
         for gaps_path in report_paths:
             if gaps_path.is_file() and json.loads(gaps_path.read_text(encoding="utf-8")):
                 raise ValueError(f"unresolved official source gaps recorded in {gaps_path}; no paid submission")
+        validate_processing_approval(
+            processing_approval or "data/manifests/paid_processing_approval.json")
     estimate = estimate_cost(speeches, price_per_1000_words=price_per_1000_words)
     print(f"Corpus: {len(speeches)} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
     if dry_run:

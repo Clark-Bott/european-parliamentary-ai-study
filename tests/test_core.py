@@ -11,7 +11,7 @@ from parliament_ai_study.cost import estimate_cost
 from parliament_ai_study.io import iter_jsonl, write_jsonl
 from parliament_ai_study.models import Speech, word_count
 from parliament_ai_study.pangram import PangramClient, ResponseCache, request_fingerprint
-from parliament_ai_study.pipeline import run_pipeline
+from parliament_ai_study.pipeline import run_pipeline, validate_processing_approval
 from parliament_ai_study.qa import audit_corpus_file
 from parliament_ai_study.sampling import sample_historical_controls
 from parliament_ai_study.sources.build import build_six_country_corpus
@@ -344,6 +344,43 @@ class PipelineTests(unittest.TestCase):
             blocked = build_six_country_corpus(root / "speeches.jsonl", sample_size=1)
             self.assertFalse(blocked["paid_inference_ready"])
             self.assertIn("Spain", blocked["unresolved_source_gaps"])
+
+    def test_processing_approval_requires_source_processor_and_transfer_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "approval.json"
+            path.write_text(json.dumps({"approved": True}), encoding="utf-8")
+            with self.assertRaisesRegex(PermissionError, "source_terms_reviewed"):
+                validate_processing_approval(path)
+            approval = {
+                "approved": True,
+                "approved_by": "Research owner",
+                "approved_at_utc": "2026-09-24T12:00:00+00:00",
+                "scope": "Pangram API processing for the six-country corpus",
+                "source_terms_reviewed": True,
+                "processor_terms_reviewed": True,
+                "international_transfer_reviewed": True,
+            }
+            path.write_text(json.dumps(approval), encoding="utf-8")
+            self.assertEqual(validate_processing_approval(path), approval)
+
+    def test_paid_mode_requires_processing_approval_before_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            corpus = base / "covered.jsonl"
+            records = [{"country": country, "date": f"{year}-01-01",
+                        "word_count": 40, "speech_id": f"{country}-{year}",
+                        "speech_text": "text " * 40, "source_identifier": "s",
+                        "source_url": "https://example.test/s"}
+                       for country in ("Germany", "France", "Netherlands", "Italy", "Spain", "Poland")
+                       for year in range(2018, 2026)]
+            write_jsonl(corpus, records)
+            (base / "gaps.json").write_text("[]\n", encoding="utf-8")
+            with self.assertRaisesRegex(PermissionError, "requires an approval record"):
+                run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
+                             confirm_paid_run=True, api_key="fake-key", model="pangram-4",
+                             price_per_1000_words=0.5, gap_reports=base / "gaps.json",
+                             processing_approval=base / "missing-approval.json")
+            self.assertFalse((base / "out/raw_pangram").exists())
 
     def test_paid_mode_refuses_incomplete_corpus_before_any_network_call(self):
         with tempfile.TemporaryDirectory() as directory:
