@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+from datetime import datetime, timezone
 import hashlib
 import html
 import json
@@ -233,6 +234,9 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
     if qa["errors"]:
         raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
     if not dry_run:
+        gap_report = Path("data/manifests/spain_unavailable_journals.json")
+        if gap_report.is_file() and json.loads(gap_report.read_text(encoding="utf-8")):
+            raise ValueError(f"unresolved official journal gaps recorded in {gap_report}; no paid submission")
         missing = [f"{country}:{year}" for country in COUNTRIES for year in range(2018, 2027)
                    if year != 2026 and not qa["country_year_counts"].get(f"{country}:{year}")]
         if missing:
@@ -258,6 +262,15 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
             sid = str(speech["speech_id"])
             text = str(speech["speech_text"])
             print(f"Pangram {index}/{total}: {sid}")
-            responses[sid] = client.analyze(text, cache, allow_paid=True)
+            try:
+                responses[sid] = client.analyze(text, cache, allow_paid=True)
+            except Exception as exc:
+                log = target / "reports" / "pangram_errors.jsonl"
+                log.parent.mkdir(parents=True, exist_ok=True)
+                with log.open("a", encoding="utf-8") as stream:
+                    stream.write(json.dumps({"at_utc": datetime.now(timezone.utc).isoformat(),
+                                             "speech_id": sid, "error_type": type(exc).__name__,
+                                             "message": str(exc)}, ensure_ascii=False) + "\n")
+                raise
     return _write_outputs(speeches, responses, target, price=price_per_1000_words,
                           model=model, synthetic=synthetic, mocked=dry_run, qa=qa)

@@ -7,14 +7,34 @@ from http.client import IncompleteRead
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
 from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links
-from parliament_ai_study.sources.italy import parse_camera_html, parse_camera_xml
-from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml, iter_tweede_kamer_speeches
+from parliament_ai_study.sources.italy import build_camera_corpus, parse_camera_html, parse_camera_xml
+from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml, iter_tweede_kamer_speeches, _odata_pages
 from unittest.mock import patch
 from parliament_ai_study.sources.sejm import parse_sejm_statement
 from parliament_ai_study.sources.spain import parse_congreso_html, journal_url
 
 
 class CongresoParserTests(unittest.TestCase):
+    def test_order_of_day_synopsis_precedes_verbatim_opening(self):
+        html = '''<div class="datos1">DS. Pleno, de 07/06/2023</div>
+        <p class="textoCompleto">ORDEN DEL DÍA: Decreto ...<br>Se abre la sesión a las once.<br>
+        La señora PRESIDENTA: Resumen no pronunciado.<br>Se abre la sesión a las once.<br>
+        La señora PRESIDENTA: Empieza la sesión de hoy.<br>El señor PÉREZ: Texto pronunciado.</p></div>'''
+        rows = parse_congreso_html(html, source_url=journal_url(14, 273), term=14, number=273)
+        self.assertEqual(len(rows), 2)
+        self.assertNotIn("Resumen", rows[0].speech_text)
+
+    def test_one_opening_after_synopsis_is_enough_for_reconvened_sitting(self):
+        html = '''<div class="datos1">DS. Pleno, de 12/04/2018</div>
+        <p class="textoCompleto">SUMARIO<br>Se levanta la sesión a la una.<br>
+        Se reanuda la sesión a las nueve.<br>
+        El señor MONTORO ROMERO: Muchas gracias. Esta ley es fundamental.<br>
+        La señora ORAMAS: Gracias. La propuesta plantea muchas dudas.</p></div>'''
+        rows = parse_congreso_html(html, source_url=journal_url(12, 115), term=12, number=115)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0].date, "2018-04-12")
+        self.assertNotIn("Se levanta", rows[0].speech_text)
+
     def test_ignores_synopsis_and_segments_verbatim_remarks(self):
         html = '''<div class="datos1">DS. Pleno, núm. 1, de 17/08/2023</div>
         <p class="textoCompleto">SUMARIO<br>Se abre la sesión a las diez.<br>
@@ -205,6 +225,29 @@ class BundestagParserTests(unittest.TestCase):
 
 
 class ItalyParserTests(unittest.TestCase):
+    def test_each_legislature_starts_at_its_own_first_sitting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            years = {(17, 1): 2017, (17, 2): 2017, (17, 3): 2018,
+                     (18, 1): 2018, (18, 2): 2019, (19, 1): 2022}
+            for (term, sitting), year in years.items():
+                path = root / "raw" / "italy" / f"leg{term}" / f"sitting-{sitting:04d}.xml"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    f'<seduta ramo="camera" legislatura="{term}" numero="{sitting}" '
+                    f'anno="{year}" mese="1" giorno="1"><resoconto><intervento id="i1">'
+                    '<testoXHTML><nominativo id="1" cognomeNome="Test Member">TEST MEMBER</nominativo>'
+                    'This is the spoken text.</testoXHTML></intervento></resoconto></seduta>',
+                    encoding="utf-8")
+            with patch("parliament_ai_study.sources.italy._last_sitting",
+                       side_effect=lambda term: {17: 3, 18: 2, 19: 1}[term]):
+                stats = build_camera_corpus(root / "italy.jsonl", raw_dir=root / "raw",
+                                            manifest_path=root / "sources.jsonl")
+            self.assertEqual(stats["sittings"], 4)
+            self.assertEqual(stats["records"], 4)
+            self.assertIn('"session_id": "camera-leg18-sed0001"',
+                          (root / "italy.jsonl").read_text(encoding="utf-8"))
+
     def test_xml_continuations_are_part_of_same_speech(self):
         xml = '''<seduta legislatura="19" numero="711" anno="2026" mese="09" giorno="18" ramo="camera">
           <resoconto tipo="stenografico"><intervento id="tit00020.int00020"><testoXHTML>
@@ -242,6 +285,18 @@ class ItalyParserTests(unittest.TestCase):
 
 
 class NetherlandsParserTests(unittest.TestCase):
+    def test_odata_manual_skip_when_server_omits_nextlink(self):
+        import json
+        pages = []
+        def fake_fetch(url):
+            pages.append(url)
+            value = [{"Id": len(pages)}] if len(pages) < 3 else []
+            return json.dumps({"value": value}).encode(), {}
+        with patch("parliament_ai_study.sources.netherlands.fetch_bytes", side_effect=fake_fetch):
+            rows = list(_odata_pages("https://example.test/Vergadering?%24top=1"))
+        self.assertEqual([row["Id"] for row in rows], [1, 2])
+        self.assertIn("%24skip=2", pages[-1])
+
     def test_odata_request_respects_official_maximum_page_size(self):
         requests = []
         def empty(url):

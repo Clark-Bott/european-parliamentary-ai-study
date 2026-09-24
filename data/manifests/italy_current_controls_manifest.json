@@ -1,0 +1,13 @@
+{
+  "country": "Italy",
+  "output": "data/controls/italy_historical_sample.jsonl",
+  "sha256": "c5280ca2881b3263ce7161d48c9ce66069cde96922364f0fb968116e703ed30d",
+  "records": 1000,
+  "words": 347158,
+  "seed": 2026,
+  "year_counts": {"2018": 250, "2019": 250, "2020": 250, "2021": 250},
+  "missing_party_records": 137,
+  "max_records_per_identified_speaker": 2,
+  "list_price_usd_at_0_05_per_unit": 196.10,
+  "note": "Historical parliamentary sample for detector calibration, not authorship ground truth. No Pangram inference performed; text Git-ignored."
+}

@@ -1,0 +1,7 @@
+# Italy local corpus build and integrity QA — 2026-09-24
+
+The Camera XML adapter processed terms 17–19 into `data/processed/italy_speeches.jsonl`. The rebuilt output contains **262,716 attributed intervention records / 49,946,554 words** across **1,457 sittings**. Term 17 contributes two January 2018 sittings; term 18 runs from March 2018 to September 2022; term 19 runs from October 2022 to September 2026. These are parser counts, not an official coverage sign-off.
+
+The disk-backed `python -m parliament_ai_study.qa data/processed/italy_speeches.jsonl` audit found **zero duplicate speech IDs or integrity errors** and **60,311 repeated normalized-text hashes**. Each year from 2018 to 2026 has records. The 40-word-eligible subset has **120,839 records / 48,085,310 words**, or **538,496 started 100-word billing units / $26,924.80** at the current list rate. See the [tracked manifest](../data/manifests/italy_current_manifest.json) for the file SHA-256 and size. Raw XML and normalized text are excluded from Git.
+
+This does **not** prove every official sitting or intervention was captured. Compare the downloaded sitting numbers with the official term indexes, inspect a reproducible random sample against the source XML, check the 141,677 `presiding_officer` role assignments and short procedural turns, and review XML endpoint reuse/third-party processing terms before research inference. No Pangram call was made.

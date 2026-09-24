@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 
 from ..io import write_jsonl
@@ -86,12 +86,30 @@ def parse_tweede_kamer_xml(xml_data: str | bytes | ET.Element, *, source_url: st
 
 
 def _odata_pages(url: str) -> Iterator[dict[str, Any]]:
+    """OData server may omit nextLink even when $top truncated the result."""
     next_url: str | None = url
+    seen_urls = set()
     while next_url:
+        if next_url in seen_urls or len(seen_urls) > 10000:
+            raise ValueError("repeated or excessive OData pagination URL")
+        seen_urls.add(next_url)
         body, _ = fetch_bytes(next_url)
         page = json.loads(body)
-        yield from page.get("value", [])
-        next_url = page.get("@odata.nextLink")
+        values = page.get("value")
+        if not isinstance(values, list):
+            raise ValueError("OData response has no value array")
+        yield from values
+        explicit = page.get("@odata.nextLink")
+        if explicit:
+            next_url = explicit
+            continue
+        parts = urlsplit(next_url)
+        params = dict(parse_qsl(parts.query))
+        limit = int(params.get("$top", "250"))
+        if len(values) < limit:
+            return
+        params["$skip"] = str(int(params.get("$skip", "0")) + len(values))
+        next_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), ""))
 
 
 def _corrected_final_report(meeting_id: str) -> dict[str, Any] | None:
@@ -125,7 +143,8 @@ def iter_tweede_kamer_speeches(*, start_year: int = 2018, end_year: int = 2026,
     )
     # The server rejects $top > 250. OData dates carry a +01:00/+02:00
     # offset, so use a padded range and filter parsed local dates below.
-    meeting_url = ODATA + "/Vergadering?" + urlencode({"$filter": meeting_filter, "$top": "250"})
+    meeting_url = ODATA + "/Vergadering?" + urlencode({"$filter": meeting_filter,
+                                                        "$orderby": "Datum asc,Id asc", "$top": "250"})
     for meeting in _odata_pages(meeting_url):
         if not start_year <= int(str(meeting["Datum"])[:4]) <= end_year:
             continue

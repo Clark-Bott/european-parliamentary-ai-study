@@ -1,8 +1,8 @@
 {
   "country": "France",
   "output": "data/processed/france_speeches.jsonl",
-  "sha256": "668b1dc6833c76a66e9be1abcd0cb28d19ff23ffa3a88e0d50c84b1ab2ae0578",
-  "bytes": 1829346774,
+  "sha256": "71321690b0fb2f40f92ea44a9b14d2d78069431a1bec7a56e10a5837e7c72dbd",
+  "bytes": 1836472970,
   "retrieval_date": "2026-09-24",
   "records": 1243606,
   "source_words": 75392623,

@@ -74,7 +74,9 @@ def main(argv: list[str] | None = None) -> int:
                            confirm_paid_run=args.confirm_paid_run,
                            api_key=os.environ.get("PANGRAM_API_KEY"))
     print(f"Pipeline complete: {summary['results_dir']}")
-    print(f"Mode: {'synthetic smoke test' if summary['synthetic_smoke_test'] else 'corpus run'}")
+    mode = "synthetic smoke test" if summary["synthetic_smoke_test"] else (
+        "real corpus / MOCKED detector responses" if summary["mocked"] else "Pangram inference")
+    print(f"Mode: {mode}")
     print(f"Outputs: 3 time aggregations; six country figures; tables; QA and report")
     return 0
 

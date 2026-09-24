@@ -1,0 +1,18 @@
+{
+  "country": "Italy",
+  "output": "data/processed/italy_speeches.jsonl",
+  "sha256": "f920ca0cc7097319a8cd086758bb7a79bd7a293d0be1fbc73efc009330990b2f",
+  "bytes": 896268339,
+  "retrieval_date": "2026-09-24",
+  "records": 262716,
+  "words": 49946554,
+  "sittings_in_range": 1457,
+  "eligible_min_words": 40,
+  "eligible_records": 120839,
+  "eligible_words": 48085310,
+  "billable_units_100_words": 538496,
+  "list_price_usd_at_0_05_per_unit": 26924.80,
+  "duplicate_speech_ids": 0,
+  "duplicate_text_hashes_all_lengths": 60311,
+  "note": "Full builder run and disk-backed file audit; official source enumeration and random intervention-boundary/rights review are not signed off. Corpus is Git-ignored."
+}

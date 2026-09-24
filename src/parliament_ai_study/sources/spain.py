@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
+import json
 import re
 
 from ..io import write_jsonl
@@ -69,12 +70,16 @@ def parse_congreso_html(data: bytes | str, *, source_url: str, term: int, number
         raise ValueError(f"official journal DSCD-{term}-PL-{number} has no full text/date")
     day = datetime.strptime(date_match.group(1), "%d/%m/%Y").date().isoformat()
     text = "".join(parser.parts)
-    # The first occurrence is in the journal's synopsis; the second begins
-    # verbatim proceedings. Never classify the synopsis as spoken text.
+    # Some journals repeat their opening in the synopsis; others mention only
+    # the adjournment there, leaving a single opening in verbatim proceedings.
+    # Do not classify the synopsis itself as spoken text.
     openings = list(re.finditer(r"Se (?:abre|reanuda) la sesión\b", text, re.I))
-    if len(openings) < 2:
+    if not openings:
         raise ValueError(f"cannot locate verbatim debate after synopsis in DSCD-{term}-PL-{number}")
-    text = text[openings[1].start():]
+    before_opening = text[:openings[0].start()]
+    if "SUMARIO" not in before_opening and ("ORDEN DEL DÍA" not in before_opening or len(openings) < 2):
+        raise ValueError(f"cannot locate verbatim debate after synopsis in DSCD-{term}-PL-{number}")
+    text = text[openings[1 if len(openings) > 1 else 0].start():]
     turns = list(_TURN.finditer(text))
     if not turns:
         raise ValueError(f"no speaker boundaries in DSCD-{term}-PL-{number}")
@@ -95,7 +100,8 @@ def parse_congreso_html(data: bytes | str, *, source_url: str, term: int, number
         output.append(Speech(country="Spain", parliament="Congreso de los Diputados",
                              chamber="Congreso de los Diputados", date=day, session_id=session,
                              speech_id=speech_id, speaker_id="", speaker_name=label,
-                             speaker_role="presiding_officer" if "PRESIDENT" in label else "",
+                             speaker_role="presiding_officer" if "PRESIDENT" in label else
+                             "minister" if "MINISTR" in label else "",
                              legislative_term=str(term), speech_text=cleaned, raw_text=raw,
                              source_url=source_url, source_identifier=speech_id,
                              source_type="official_congreso_diario_html", text_language="es",
@@ -127,6 +133,7 @@ def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, en
                           raw_dir: str | Path = "data/raw",
                           manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int]:
     counts = {"records": 0, "words": 0, "journals": 0}
+    gaps: list[dict[str, str | int]] = []
 
     def rows():
         for term in (12, 13, 14, 15):
@@ -152,7 +159,12 @@ def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, en
                 path = Path(raw_dir) / "spain" / f"term-{term}" / f"DSCD-{term}-PL-{number}.html"
                 if not path.exists():
                     download_file(url, path, manifest_path=manifest_path)
-                speeches = parse_congreso_html(path.read_bytes(), source_url=url, term=term, number=number)
+                contents = path.read_bytes()
+                if b'class="textoCompleto"' not in contents:
+                    gaps.append({"term": term, "number": number, "url": url,
+                                 "reason": "numbered official journal lookup returned no full text"})
+                    continue
+                speeches = parse_congreso_html(contents, source_url=url, term=term, number=number)
                 if not start_year <= int(speeches[0].date[:4]) <= end_year:
                     continue
                 counts["journals"] += 1
@@ -162,4 +174,8 @@ def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, en
                     yield speech.to_dict()
 
     write_jsonl(output_path, rows())
+    report = Path(manifest_path).parent / "spain_unavailable_journals.json"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(json.dumps(gaps, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    counts["unavailable_journal_numbers"] = len(gaps)
     return counts

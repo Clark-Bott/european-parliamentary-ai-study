@@ -170,11 +170,15 @@ def parse_camera_xml(data: bytes | str, *, source_url: str) -> list[Speech]:
             clean = clean[len(party_match.group(0)):].lstrip(" .,:;–-")
         if not clean:
             continue
+        title = " ".join("".join(list(node)[1].itertext()).split()) if len(list(node)) > 1 and list(node)[1].tag == "emphasis" else ""
+        role = ("presiding_officer" if label.casefold().startswith("presidente") else
+                "minister" if re.search(r"ministr[oa]|sottosegretari[oa]", title, re.I) else
+                "floor_speaker")
         output.append(Speech(country="Italy", parliament="Camera dei deputati", chamber="Camera dei deputati",
                              date=date_value, session_id=session, speech_id=f"{session}:{element_id}",
                              speaker_id=name.attrib.get("id", ""), speaker_name=speaker_name,
                              party=party_match.group(1) if party_match else "",
-                             speaker_role="presiding_officer" if label.casefold().startswith("presidente") else "floor_speaker",
+                             speaker_role=role,
                              legislative_term=term, speech_text=clean, raw_text=raw,
                              source_url=source_url + "#" + element_id, source_identifier=element_id,
                              source_type="official_camera_stenographic_xml", text_language="it",
@@ -206,6 +210,7 @@ def build_camera_corpus(output_path: str | Path, *, start_year: int = 2018, end_
     def rows():
         for term in (17, 18, 19):
             last = _last_sitting(term)
+            low = 1
             # Electoral term 17 begins in 2013. Locate the first requested
             # year by sitting number rather than downloading five extra years.
             low, high = 1, last + 1

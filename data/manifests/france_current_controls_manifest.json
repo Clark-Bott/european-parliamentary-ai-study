@@ -1,0 +1,14 @@
+{
+  "country": "France",
+  "output": "data/controls/france_historical_sample.jsonl",
+  "sha256": "dd727ce981a3439413f52d117e9ffae92fe82e51095a29c39c6a10fba98bb337",
+  "records": 1000,
+  "words": 227358,
+  "seed": 2026,
+  "year_counts": {"2018": 250, "2019": 250, "2020": 250, "2021": 250},
+  "missing_party_records": 775,
+  "empty_speaker_id_records": 215,
+  "pangram4_billable_units_100_words": 2742,
+  "list_price_usd_at_0_05_per_unit": 137.10,
+  "note": "Real historical parliamentary corpus sample for detector calibration; no Pangram inference performed; sample text Git-ignored."
+}
