@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 import re
 from typing import Any, Iterator
-from urllib.parse import quote
 
 from ..io import write_jsonl
 from ..models import Speech

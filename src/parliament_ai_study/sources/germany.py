@@ -16,7 +16,7 @@ from zipfile import ZipFile
 
 from ..io import write_jsonl
 from ..models import Speech
-from .download import download_file, fetch_bytes
+from .download import download_file
 
 BASE = "https://www.bundestag.de"
 # IDs are the XML-only document lists on the Bundestag's Open Data page.
