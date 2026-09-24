@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from urllib.error import HTTPError
 
-from parliament_ai_study.analysis import aggregate_results
+from parliament_ai_study.analysis import aggregate_results, is_chair_role, is_minister_role
 from parliament_ai_study.cost import estimate_cost
 from parliament_ai_study.io import iter_jsonl, write_jsonl
 from parliament_ai_study.models import Speech, word_count
@@ -176,6 +176,61 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(result["mixed_words_estimate"], 2)
         self.assertAlmostEqual(result["ai_word_share"], 0.3)
         self.assertAlmostEqual(result["mixed_word_share"], 0.2)
+
+    def test_window_labels_with_spaces_and_slashes_are_recognized(self):
+        speeches = [{"country": "France", "date": "2024-01-01", "word_count": 100, "speech_id": "f"}]
+        responses = {"f": {"fraction_ai": 0.0, "fraction_ai_assisted": 0.0,
+                           "windows": [{"label": "AI Generated", "word_count": 25},
+                                       {"label": "AI-Assisted / Mixed", "word_count": 15},
+                                       {"label": "Human Written", "word_count": 60}]}}
+        result = aggregate_results(speeches, responses, period="year", min_words=0)[0]
+        self.assertAlmostEqual(result["ai_word_share"], 0.25)
+        self.assertAlmostEqual(result["mixed_word_share"], 0.15)
+
+    def test_unknown_window_vocabulary_keeps_response_fractions_instead_of_zeroing(self):
+        speeches = [{"country": "Italy", "date": "2024-01-01", "word_count": 100, "speech_id": "i"}]
+        responses = {"i": {"fraction_ai": 0.4, "fraction_ai_assisted": 0.1,
+                           "windows": [{"label": "AI Generated Text (v5)", "word_count": 50},
+                                       {"label": "Written By A Human", "word_count": 50}]}}
+        result = aggregate_results(speeches, responses, period="year", min_words=0)[0]
+        self.assertAlmostEqual(result["ai_word_share"], 0.4)
+        self.assertAlmostEqual(result["mixed_word_share"], 0.1)
+
+    def test_minister_filter_matches_every_source_language(self):
+        minister_roles = [
+            "Bundesminister der Finanzen", "Bundeskanzlerin",          # Germany
+            "ministre déléguée", "Premier ministre", "garde des sceaux",  # France
+            "minister-president, minister van Algemene Zaken",         # Netherlands
+            "staatssecretaris van Infrastructuur en Waterstaat",
+            "minister",                                                # Italy, Spain
+            "Prezes Rady Ministrów",                                   # Poland
+        ]
+        for role in minister_roles:
+            self.assertTrue(is_minister_role(role), role)
+        ordinary_roles = ["", "lid Tweede Kamer", "rapporteur", "floor_speaker",
+                          "Sekretarz Poseł", "Presidentschaft"]
+        for role in ordinary_roles:
+            self.assertFalse(is_minister_role(role), role)
+        rows = [{"country": "Germany", "date": "2024-01-01", "word_count": 50,
+                 "speech_id": "m", "speaker_role": "Bundesministerin des Innern"}]
+        response = {"m": {"fraction_ai": 0.5, "fraction_ai_assisted": 0.0}}
+        self.assertEqual(aggregate_results(rows, response, exclude_ministers=True), [])
+        self.assertEqual(len(aggregate_results(rows, response)), 1)
+
+    def test_chair_filter_matches_plenary_chairs_but_not_committee_chairs(self):
+        chair_roles = ["presiding_officer", "Präsident", "Präsidentin",
+                       "Präsident Dr. Wolfgang Schäuble", "Vizepräsidentin",
+                       "Wicemarszałek"]
+        for role in chair_roles:
+            self.assertTrue(is_chair_role(role), role)
+        self.assertTrue(is_chair_role("", "Marszałek"))
+        # German state premiers are cabinet roles, French and Dutch committee
+        # presidents are not the plenary chair: none belongs in the chair
+        # exclusion.
+        for role in ["Ministerpräsident (Bayern)",
+                     "président de la commission des finances",
+                     "voorzitter van de commissie"]:
+            self.assertFalse(is_chair_role(role), role)
 
 
 class CacheTests(unittest.TestCase):

@@ -63,17 +63,30 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 country_digest.update(chunk)
         country_hashes[country] = country_digest.hexdigest()
-    # Controls are separate from the full historical archive. The sampler is
-    # deterministic and works country-by-country, avoiding combined-corpus RAM.
+    # Controls are separate from the full historical archive. One deterministic
+    # sample per country, at the path the control manifests already track, so a
+    # rebuild reuses finished samples instead of writing a second variant.
     controls: list[dict] = []
-    for path in paths.values():
-        controls.extend(sample_historical_controls(iter_jsonl(path),
-                                                   sample_size_per_country=sample_size))
-    control_path = target.parent.parent / "controls" / "historical_sample.jsonl"
+    control_paths: dict[str, str] = {}
+    controls_dir = target.parent.parent / "controls"
+    controls_dir.mkdir(parents=True, exist_ok=True)
+    for country, path in paths.items():
+        control_path = controls_dir / f"{country.lower()}_historical_sample.jsonl"
+        control_paths[country] = str(control_path)
+        if control_path.is_file():
+            print(f"Using existing {country} control sample: {control_path}", flush=True)
+            controls.extend(iter_jsonl(control_path))
+            continue
+        country_controls = sample_historical_controls(
+            iter_jsonl(path), sample_size_per_country=sample_size)
+        write_jsonl(control_path, country_controls)
+        controls.extend(country_controls)
+    control_path = controls_dir / "historical_sample.jsonl"
     write_jsonl(control_path, controls)
     report = {"corpus": str(target), "sha256": digest.hexdigest(), "bytes": target.stat().st_size,
               "country_files": {key: str(value) for key, value in paths.items()},
-              "control_sample": str(control_path), "sample_records": len(controls),
+              "control_sample": str(control_path), "control_files": control_paths,
+              "sample_records": len(controls),
               "start_year": start_year, "end_year": end_year}
     manifest = target.parent.parent / "manifests" / "combined_corpus.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)

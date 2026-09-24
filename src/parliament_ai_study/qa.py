@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import date
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -102,7 +103,9 @@ def audit_corpus_file(path: str | Path, *, start_year: int = 2018,
     empty_count = 0
     implausible_count = 0
     words = 0
-    scratch = "/tmp/opencode" if Path("/tmp/opencode").is_dir() else None
+    scratch = os.environ.get("PARLIAMENT_QA_SCRATCH") or None
+    if scratch is not None and not Path(scratch).is_dir():
+        raise ValueError(f"PARLIAMENT_QA_SCRATCH is not a directory: {scratch}")
     with tempfile.TemporaryDirectory(prefix="parliament-qa-", dir=scratch) as tmp:
         connection = sqlite3.connect(str(Path(tmp) / "qa.sqlite"))
         connection.execute("CREATE TABLE ids (id TEXT PRIMARY KEY)")

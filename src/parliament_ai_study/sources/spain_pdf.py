@@ -224,7 +224,6 @@ def parse_congreso_pdf(data: bytes, *, source_url: str, term: int, number: int,
         raise ValueError(f"no PDF speaker boundaries in DSCD-{term}-PL-{number}")
 
     if date_value is None:
-        date_value = None
         for line in lines:
             numeric = re.search(r"\b\d{2}/\d{2}/\d{4}\b", line.text)
             if numeric:

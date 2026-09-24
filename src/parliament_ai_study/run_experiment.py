@@ -93,6 +93,6 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (ValueError, PermissionError, FileNotFoundError, EnvironmentError, TimeoutError) as exc:
+    except (ValueError, RuntimeError, PermissionError, FileNotFoundError, EnvironmentError, TimeoutError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         raise SystemExit(2)

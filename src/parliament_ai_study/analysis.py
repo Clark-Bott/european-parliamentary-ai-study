@@ -4,7 +4,84 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable, Mapping
 from datetime import date
+import re
 from typing import Any, Iterable
+
+# Role vocabulary measured on the six normalized corpora. Filtering has to
+# work in every source language: adapters emit free-text roles (Germany,
+# Netherlands, Poland), normalized tokens (Italy, Spain, France), or both.
+#
+# Ministers: the stem "minist" covers German Minister(in), French
+# ministre/ministère, Dutch minister(-president), Italian minister/ministro,
+# Spanish minister/ministro, and Polish Prezes Rady Ministrów. The remaining
+# markers catch cabinet roles that lack that stem (chancellor, premier,
+# secretaries of state, keeper of the seals).
+MINISTER_MARKERS = (
+    "minist", "kanzler", "premier", "secrétaire d'état", "secretaire d'etat",
+    "staatssecretaris", "garde des sceaux", "presidente del consiglio",
+    "sottosegretari",
+)
+
+# Presiding officers: "presiding_officer" is the token emitted by the French,
+# Italian, and Spanish adapters. German uses free-text Präsident(in)/
+# Vizepräsident(in) titles and Poland uses Marszałek/Wicemarszałek (observed
+# in the role or the name field). The German state title Ministerpräsident(in)
+# is a head of government, not a chamber chair, so it is handled by the
+# minister filter instead. Committee chairs are not chamber chairs and are
+# deliberately not excluded: the Dutch voorzitter roles are all committee or
+# Presidium chairs, and French président de la commission roles are likewise
+# committee offices. The Dutch plenary chair is not identifiable from the
+# role metadata, so Dutch rows are never excluded by this filter.
+CHAIR_ROLE_MARKERS = ("präsident", "praeses", "marszał", "presiding")
+CHAIR_NAME_PREFIXES = ("marszałek", "wicemarszałek")
+CHAIR_NAME_MARKERS = (
+    "le président", "la présidente", "président de la séance",
+    "presidente de la mesa", "presidente de la cámara",
+)
+
+# Pangram window labels, normalized to lowercase ASCII alphanumerics.
+AI_WINDOW_LABELS = {"ai-generated", "ai-written", "ai", "generated-by-ai",
+                    "machine-generated", "ai-text", "ai-generated-text"}
+MIXED_WINDOW_LABELS = {"ai-assisted", "mixed", "ai-assisted-mixed",
+                       "ai-assisted-and-mixed", "mixed-ai-human"}
+HUMAN_WINDOW_LABELS = {"human-written", "human", "human-text", "human-generated",
+                       "non-ai", "not-ai", "not-ai-written"}
+
+
+def _normalize_role(value: Any) -> str:
+    return str(value or "").casefold().replace("’", "'").strip()
+
+
+def is_minister_role(role: Any) -> bool:
+    """True for cabinet/ministerial roles in any of the six source languages."""
+    normalized = _normalize_role(role)
+    return any(marker in normalized for marker in MINISTER_MARKERS)
+
+
+def is_chair_role(role: Any, speaker_name: Any = "") -> bool:
+    """True for presiding-officer/chair roles across the six chambers.
+
+    French, Italian, and Spanish adapters already mark the plenary chair as
+    ``presiding_officer``. For free-text roles the match is on the plenary
+    chair vocabulary; generic French ``président de la commission …`` roles
+    are committee chairs and are deliberately not excluded.
+    """
+    normalized = _normalize_role(role)
+    if normalized == "presiding_officer":
+        return True
+    if "ministerpräsident" in normalized:
+        return False
+    if any(marker in normalized for marker in CHAIR_ROLE_MARKERS):
+        return True
+    normalized_name = _normalize_role(speaker_name)
+    if any(normalized_name.startswith(prefix) for prefix in CHAIR_NAME_PREFIXES):
+        return True
+    return any(marker in normalized_name for marker in CHAIR_NAME_MARKERS)
+
+
+def _normalize_window_label(label: Any) -> str:
+    """Fold ``AI Generated``/``ai_generated``/``AI-Assisted / Mixed`` to one key."""
+    return re.sub(r"[^a-z0-9]+", "-", str(label or "").casefold()).strip("-")
 
 
 def _period(day: date, kind: str) -> str:
@@ -42,12 +119,11 @@ def aggregate_results(
         words = int(get("word_count", 0))
         if words < min_words:
             continue
-        role = str(get("speaker_role", "")).casefold()
-        name = str(get("speaker_name", "")).casefold()
-        if exclude_ministers and "minister" in role:
+        role = str(get("speaker_role", ""))
+        name = str(get("speaker_name", ""))
+        if exclude_ministers and is_minister_role(role):
             continue
-        if exclude_chairs and (any(term in role for term in ("chair", "president", "speaker", "presiding", "voorzitter", "marszał"))
-                               or any(term in name for term in ("le président", "la présidente", "presidenta", "presidente de la mesa"))):
+        if exclude_chairs and is_chair_role(role, name):
             continue
         speech_id = str(get("speech_id", ""))
         response = responses(speech) if callable(responses) else responses[speech_id]
@@ -61,17 +137,22 @@ def aggregate_results(
         if isinstance(windows, list) and windows:
             window_ai = window_mixed = 0
             classified_words = 0
+            unknown_labels: set[str] = set()
             for window in windows:
-                label = str(window.get("label", "")).casefold().replace("_", "-")
+                label = _normalize_window_label(window.get("label", ""))
                 count = int(window.get("word_count", 0))
                 if count < 0:
                     raise ValueError(f"negative window word count for {speech_id}")
                 classified_words += count
-                if label in {"ai-generated", "ai-written", "ai"}:
+                if label in AI_WINDOW_LABELS:
                     window_ai += count
-                elif label in {"ai-assisted", "mixed", "ai-assisted / mixed"}:
+                elif label in MIXED_WINDOW_LABELS:
                     window_mixed += count
-            if classified_words:
+                elif label in HUMAN_WINDOW_LABELS:
+                    pass
+                else:
+                    unknown_labels.add(label)
+            if classified_words and not unknown_labels:
                 # Pangram 4 can normalize the submitted text. Its window word
                 # count need not equal our Unicode tokenizer's word count.
                 # Scale window proportions to the common source denominator.
@@ -79,6 +160,11 @@ def aggregate_results(
                 mixed = window_mixed / classified_words
                 ai_words = words * ai
                 mixed_words = words * mixed
+            elif unknown_labels:
+                # An unrecognised window vocabulary must not be read as zero
+                # AI words. Keep the validated response-level fractions, which
+                # Pangram computes from the same windows.
+                pass
         day = date.fromisoformat(str(get("date")))
         key = (str(get("country")), _period(day, period))
         group = groups[key]

@@ -210,7 +210,6 @@ def build_camera_corpus(output_path: str | Path, *, start_year: int = 2018, end_
     def rows():
         for term in (17, 18, 19):
             last = _last_sitting(term)
-            low = 1
             # Electoral term 17 begins in 2013. Locate the first requested
             # year by sitting number rather than downloading five extra years.
             low, high = 1, last + 1
