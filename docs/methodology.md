@@ -16,7 +16,7 @@ AI-assisted/mixed fraction is reported separately and also in a labeled combined
 
 ## Time periods and controls
 
-Use 2018–2021 as pre-LLM historical controls, 2022 as a transition year, and 2023 onward as post-ChatGPT. Current endpoint availability, not a presumed complete 2026 year, sets the latest observed date. The reproducible sampler uses a fixed seed, round-robin quotas across years and party/length strata, and a maximum per identified speaker; unknown parties remain a visible stratum, and unknown speaker IDs fall back to speech-specific keys. The first French local control sample and its missing-party caveat are in [`historical_controls.md`](historical_controls.md). Complete historic corpora are retained when practical. Country-language baseline estimates are diagnostic/sensitivity adjustments, never ground truth.
+Use 2018–2021 as pre-LLM historical controls, 2022 as a transition year, and 2023 onward as post-ChatGPT. Current endpoint availability, not a presumed complete 2026 year, sets the latest observed date. The reproducible sampler uses a fixed seed, round-robin quotas across years and party/length strata, and a maximum per identified speaker; unknown parties remain a visible stratum, and unknown speaker IDs fall back to speech-specific keys. Executed local controls and their metadata limitations are in [`historical_controls.md`](historical_controls.md). Complete historic corpora are retained when practical. Country-language baseline estimates are diagnostic/sensitivity adjustments, never ground truth.
 
 ## Cleaning and inclusion
 
@@ -28,7 +28,7 @@ Aggregate by country and month, quarter, and year. Provide word-weighted and int
 
 ## Pangram use and cost
 
-The documented API is asynchronous (`POST /task`, then poll `GET /task/{task_id}`); new integrations must specify a model selector, and `GET /models` reports key-specific access.[2] Developer pricing lists Pangram 4 at $0.05 per **started 100-word block for each submitted item** and Pangram 3 at a different unit/rate. `estimate_cost` uses `ceil(speech_words/100)` for Pangram 4's default configuration; the task client does not claim a bulk discount.[3] Billing and account-specific terms must be reconfirmed before paid submission. No paid call is part of this work.
+The documented API is asynchronous (`POST /task`, then poll `GET /task/{task_id}`); new integrations must specify a model selector, and `GET /models` reports key-specific access.[2] The payload contains only `speech_text`; speaker identity and source metadata remain local. Developer pricing lists Pangram 4 at $0.05 per **started 100-word block for each submitted item** and Pangram 3 at a different unit/rate. `estimate_cost` uses `ceil(speech_words/100)` for Pangram 4's default configuration; the task client does not claim a bulk discount.[3] Billing, account-specific terms, source rights, processor terms, retention, and international transfers must be reviewed and recorded before paid submission. The runtime rejects a missing processing-approval record. No paid call is part of this work.
 
 ## Sources
 

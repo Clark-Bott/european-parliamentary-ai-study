@@ -6,7 +6,7 @@
 4. **Selection and coverage.** Full official archives can omit committee speech, informal exchange, or periods with different recording practices; daily files can change after correction. Country/year comparisons are only defensible after coverage is measured.
 5. **Corpus unit and cleaning.** Parliamentary interventions are not identical to prepared speeches. Short procedural turns, interruptions, quoted text, staff-drafted remarks, and floor transcripts can distort speech-level estimates.
 6. **Pricing and API behavior change.** Pangram's public price page currently lists different rates for Pangram 3 and 4; rates and account-specific billing can change.[3] A live cost estimate and explicit confirmation must precede any paid request.
-7. **Privacy and attribution.** Public parliamentary text can still contain personally identifying information, quotations, and sensitive matter. Limit submitted text to the research question, document retention, and do not publish individual rankings or detector labels as factual claims.
+7. **Privacy, rights, and attribution.** Public parliamentary text can still contain personally identifying information, quotations, and sensitive matter. The client submits only speech text, but source permissions and Pangram's processor terms remain separate questions. The unresolved evidence and required approval are recorded in [`rights_and_processing_review.md`](rights_and_processing_review.md). Do not publish individual rankings or detector labels as factual claims.
 
 ## Interpretation rule
 
