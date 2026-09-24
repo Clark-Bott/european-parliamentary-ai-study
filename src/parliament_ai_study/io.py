@@ -18,10 +18,6 @@ def iter_jsonl(path: str | Path) -> Iterator[dict[str, Any]]:
                 yield value
 
 
-def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    return list(iter_jsonl(path))
-
-
 def write_jsonl(path: str | Path, records: Iterable[dict[str, Any]]) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)

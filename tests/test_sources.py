@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,6 +21,32 @@ from parliament_ai_study.sources.sejm import audit_sejm_raw_coverage, download_s
 from parliament_ai_study.sources.spain import (_has_journal, _html_full_text_available,
                                              parse_congreso_html, journal_url)
 from parliament_ai_study.sources.spain_pdf import _Chunk, _Line, parse_congreso_pdf
+
+
+def _spain_pdf_fixture(term: int, number: int) -> Path | None:
+    """Locate an official PDF fixture, which is not part of a fresh clone.
+
+    Search order: PARLIAMENT_SPAIN_PDF_DIR, then the local raw archive. The
+    golden test skips when no fixture is present on this machine.
+    """
+    name = f"DSCD-{term}-PL-{number}.PDF"
+    candidates = []
+    override = os.environ.get("PARLIAMENT_SPAIN_PDF_DIR")
+    if override:
+        candidates.append(Path(override) / name)
+    candidates.append(Path("/tmp/opencode") / name)
+    for directory in (Path("data/raw/spain"), Path("data/raw")):
+        if directory.is_dir():
+            candidates.extend(sorted(directory.rglob(name)))
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _both_spain_fixtures_present() -> bool:
+    return all(_spain_pdf_fixture(term, number)
+               for term, number in ((12, 162), (14, 59)))
 
 
 class CongresoParserTests(unittest.TestCase):
@@ -110,8 +137,7 @@ class CongresoParserTests(unittest.TestCase):
                 parse_congreso_pdf(b"%PDF-1.4\n", source_url="https://example.test/journal.pdf",
                                    term=14, number=59, date_value="2020-10-29")
 
-    @unittest.skipUnless(Path("/tmp/opencode/DSCD-12-PL-162.PDF").is_file() and
-                         Path("/tmp/opencode/DSCD-14-PL-59.PDF").is_file(),
+    @unittest.skipUnless(_both_spain_fixtures_present(),
                          "official PDF validation fixtures are not in a fresh clone")
     def test_official_pdf_fallback_golden_counts_and_determinism(self):
         try:
@@ -121,7 +147,8 @@ class CongresoParserTests(unittest.TestCase):
         expected = {(12, 162): (252, 39537, "rompa con los partidos independentistas"),
                     (14, 59): (148, 53545, "la vacuna o un tratamiento eficaz")}
         for (term, number), (count, words, excerpt) in expected.items():
-            path = Path(f"/tmp/opencode/DSCD-{term}-PL-{number}.PDF")
+            path = _spain_pdf_fixture(term, number)
+            self.assertIsNotNone(path, f"fixture missing for DSCD-{term}-PL-{number}")
             url = f"https://www.congreso.es/public_oficiales/L{term}/CONG/DS/PL/DSCD-{term}-PL-{number}.PDF"
             first = parse_congreso_pdf(path.read_bytes(), source_url=url, term=term, number=number)
             second = parse_congreso_pdf(path.read_bytes(), source_url=url, term=term, number=number)

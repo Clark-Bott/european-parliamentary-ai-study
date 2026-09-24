@@ -33,6 +33,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=None, help="explicit Pangram model selector; defaults to PANGRAM_MODEL or pangram-4")
     parser.add_argument("--price-per-1000-words", type=float, default=None)
     parser.add_argument("--confirm-paid-run", action="store_true", help="required explicit authorization for paid inference")
+    parser.add_argument("--max-cost", type=float, default=None,
+                        help="refuse any run whose estimate exceeds this USD amount")
     parser.add_argument("--estimate-only", action="store_true", help="print cost table and exit without inference or analysis")
     parser.add_argument("--build-corpus", action="store_true", help="acquire/rebuild missing country corpora before a dry run or estimate")
     parser.add_argument("--country", help="optional country filter for --estimate-only")
@@ -81,7 +83,8 @@ def main(argv: list[str] | None = None) -> int:
                            confirm_paid_run=args.confirm_paid_run,
                            api_key=os.environ.get("PANGRAM_API_KEY"),
                            gap_reports=args.gap_report,
-                           processing_approval=args.processing_approval)
+                           processing_approval=args.processing_approval,
+                           max_cost=args.max_cost)
     print(f"Pipeline complete: {summary['results_dir']}")
     mode = "synthetic smoke test" if summary["synthetic_smoke_test"] else (
         "real corpus / MOCKED detector responses" if summary["mocked"] else "Pangram inference")

@@ -134,7 +134,9 @@ class PangramClient:
             return cached
         state = cache.state(fingerprint)
         if state and state.get("status") == "submission_unknown":
-            raise RuntimeError("previous POST outcome is ambiguous; inspect Pangram before resetting this cache entry")
+            raise RuntimeError(
+                "previous POST outcome is ambiguous; inspect Pangram before "
+                f"resetting this cache entry (fingerprint {fingerprint})")
         pending = cache.pending(fingerprint)
         if pending is None:
             if not allow_paid:
@@ -155,14 +157,20 @@ class PangramClient:
                     if exc.code == 429 or exc.code in (400, 401, 402, 403, 413, 422):
                         raise
                     cache.mark_unknown(fingerprint, f"POST HTTP status {exc.code}; billing outcome unknown")
-                    raise RuntimeError("submission outcome unknown; refusing automatic resubmission") from exc
+                    raise RuntimeError(
+                        "submission outcome unknown; refusing automatic resubmission "
+                        f"(fingerprint {fingerprint})") from exc
                 except (URLError, TimeoutError, OSError) as exc:
                     cache.mark_unknown(fingerprint, f"POST outcome may be ambiguous: {type(exc).__name__}")
-                    raise RuntimeError("submission outcome unknown; refusing automatic resubmission") from exc
+                    raise RuntimeError(
+                        "submission outcome unknown; refusing automatic resubmission "
+                        f"(fingerprint {fingerprint})") from exc
             task_id = created.get("task_id")
             if not isinstance(task_id, str) or not task_id:
                 cache.mark_unknown(fingerprint, "POST response did not include task_id")
-                raise ValueError("Pangram POST response missing task_id; refusing resubmission")
+                raise ValueError(
+                    "Pangram POST response missing task_id; refusing resubmission "
+                    f"(fingerprint {fingerprint})")
             cache.save_pending(fingerprint, task_id)
             pending = {"task_id": task_id}
         task_id = pending["task_id"]

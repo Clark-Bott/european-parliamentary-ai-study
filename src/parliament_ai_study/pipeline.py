@@ -308,7 +308,8 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  gap_reports: str | Path | Iterable[str | Path] | None = None,
                  processing_approval: str | Path | None = None,
                  positive_controls: str | Path | None = Path(
-                     "data/controls/positive_controls.jsonl")) -> dict[str, Any]:
+                     "data/controls/positive_controls.jsonl"),
+                 max_cost: float | None = None) -> dict[str, Any]:
     """Run the deterministic mock workflow or authorized Pangram inference."""
     target = Path(results_dir)
     synthetic = False
@@ -351,6 +352,10 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
 
     estimate = estimate_cost(iter_jsonl(corpus_path), price_per_1000_words=price_per_1000_words)
     print(f"Corpus: {qa['records']} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
+    if max_cost is not None and estimate["estimated_cost"] > max_cost:
+        raise PermissionError(
+            f"estimated cost ${estimate['estimated_cost']:.2f} exceeds the --max-cost "
+            f"cap of ${max_cost:.2f}; raise the cap deliberately to continue")
     if dry_run:
         response_for_speech = _mock_response
         response_min_words = 0

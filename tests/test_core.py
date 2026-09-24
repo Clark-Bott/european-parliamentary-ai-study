@@ -665,5 +665,15 @@ class SourceBoundaryReviewTests(unittest.TestCase):
             self.assertEqual(sample_records(corpus, "France", 5, 2026), [])
 
 
+    def test_max_cost_cap_refuses_a_run_over_the_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            with self.assertRaises(PermissionError):
+                run_pipeline(corpus=None, results_dir=base / "out", dry_run=True,
+                             price_per_1000_words=0.5, model="pangram-4",
+                             max_cost=0.01)
+            self.assertFalse((base / "out/tables").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
