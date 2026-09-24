@@ -10,11 +10,12 @@ from .germany import build_bundestag_corpus
 from .italy import build_camera_corpus
 from .netherlands import build_tweede_kamer_corpus
 from .sejm import build_sejm_corpus
+from .spain import build_congreso_corpus
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Acquire and normalize official parliamentary sources")
-    parser.add_argument("country", choices=("France", "Germany", "Netherlands", "Italy", "Poland"), help="country adapter to execute")
+    parser.add_argument("country", choices=("France", "Germany", "Netherlands", "Italy", "Spain", "Poland"), help="country adapter to execute")
     parser.add_argument("--start-year", type=int, default=2018)
     parser.add_argument("--end-year", type=int, default=2026)
     parser.add_argument("--terms", type=int, nargs="+", default=[15, 16, 17], help="Assemblée législature archives to use")
@@ -30,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
         stats = build_france_corpus(archives, output, start_year=args.start_year, end_year=args.end_year)
     else:
         builder = {"Germany": build_bundestag_corpus, "Italy": build_camera_corpus,
+                   "Spain": build_congreso_corpus,
                    "Netherlands": build_tweede_kamer_corpus,
                    "Poland": build_sejm_corpus}[args.country]
         stats = builder(output, **opts)

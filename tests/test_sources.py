@@ -10,6 +10,25 @@ from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links
 from parliament_ai_study.sources.italy import parse_camera_html, parse_camera_xml
 from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml
 from parliament_ai_study.sources.sejm import parse_sejm_statement
+from parliament_ai_study.sources.spain import parse_congreso_html, journal_url
+
+
+class CongresoParserTests(unittest.TestCase):
+    def test_ignores_synopsis_and_segments_verbatim_remarks(self):
+        html = '''<div class="datos1">DS. Pleno, núm. 1, de 17/08/2023</div>
+        <p class="textoCompleto">SUMARIO<br>Se abre la sesión a las diez.<br>
+        La señora PRESIDENTA: Summary text only.<br>
+        Se abre la sesión a las diez.<br>
+        La señora PRESIDENTA: Comienza el debate.<br>
+        El señor RODRÍGUEZ DE MILLÁN: Señorías, esta propuesta es importante. (Aplausos).<br>
+        La señora PRESIDENTA: Gracias, señor diputado.</p></div>'''
+        rows = parse_congreso_html(html, source_url=journal_url(15, 1), term=15, number=1)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[1].date, "2023-08-17")
+        self.assertEqual(rows[1].speaker_name, "RODRÍGUEZ DE MILLÁN")
+        self.assertNotIn("Summary", rows[0].speech_text)
+        self.assertNotIn("Aplausos", rows[1].speech_text)
+        self.assertIn("Aplausos", rows[1].raw_text)
 
 
 class ManifestTests(unittest.TestCase):
