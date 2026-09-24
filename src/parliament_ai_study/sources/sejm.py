@@ -145,10 +145,29 @@ def iter_sejm_speeches(*, start_year: int = 2018, end_year: int = 2026,
                                                   workers=workers)
 
 
+def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw") -> dict[str, Any]:
+    """Summarize cached Sejm proceeding indexes and statement-body files."""
+    terms = []
+    for term in TERMS:
+        root = Path(raw_dir) / "poland" / f"term-{term}"
+        proceedings_path = root / "proceedings.json"
+        proceedings = json.loads(proceedings_path.read_text(encoding="utf-8")) if proceedings_path.is_file() else []
+        dates = [date_value for sitting in proceedings for date_value in sitting.get("dates", [])]
+        body_files = list(root.glob("proceeding-*/**/statement-*.html"))
+        metadata_files = list(root.glob("proceeding-*/**/statements.json"))
+        terms.append({
+            "term": term, "proceedings": len(proceedings), "dates": len(dates),
+            "first_date": min(dates) if dates else None, "last_date": max(dates) if dates else None,
+            "statement_metadata_files": len(metadata_files), "statement_body_files": len(body_files),
+        })
+    return {"terms": terms,
+            "note": "Raw-file audit only; official API index reconciliation and random boundary review remain separate."}
+
+
 def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                       terms: tuple[int, ...] = TERMS, raw_dir: str | Path = "data/raw",
                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
-                      workers: int = 4) -> dict[str, int]:
+                      workers: int = 4) -> dict[str, int | str]:
     records = words = 0
 
     def serialized():
@@ -161,7 +180,11 @@ def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_ye
             yield speech.to_dict()
 
     write_jsonl(output_path, serialized())
-    return {"records": records, "words": words}
+    coverage_path = Path(manifest_path).parent / "poland_coverage_audit.json"
+    coverage_path.parent.mkdir(parents=True, exist_ok=True)
+    coverage_path.write_text(json.dumps(audit_sejm_raw_coverage(raw_dir), ensure_ascii=False, indent=2) + "\n",
+                             encoding="utf-8")
+    return {"records": records, "words": words, "coverage_audit": str(coverage_path)}
 
 
 def main(argv: list[str] | None = None) -> int:

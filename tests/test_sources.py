@@ -16,7 +16,7 @@ from parliament_ai_study.sources.netherlands import (audit_tweede_kamer_coverage
     iter_tweede_kamer_speeches, parse_tweede_kamer_xml, _odata_pages,
     _select_final_report)
 from unittest.mock import patch
-from parliament_ai_study.sources.sejm import download_sejm_date, parse_sejm_statement
+from parliament_ai_study.sources.sejm import audit_sejm_raw_coverage, download_sejm_date, parse_sejm_statement
 from parliament_ai_study.sources.spain import parse_congreso_html, journal_url
 from parliament_ai_study.sources.spain_pdf import _Chunk, _Line, parse_congreso_pdf
 
@@ -524,6 +524,23 @@ class SejmParserTests(unittest.TestCase):
         self.assertEqual([row.speech_id.rsplit("statement", 1)[-1] for row in rows], ["1", "2"])
         self.assertTrue(all(row.speech_id.startswith("sejm-term8-proceeding1-2018-01-10-")
                             for row in rows))
+
+    def test_raw_coverage_audit_counts_proceedings_and_statement_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "poland/term-8"
+            (root).mkdir(parents=True)
+            (root / "proceedings.json").write_text(json.dumps([
+                {"number": 1, "dates": ["2018-01-10", "2018-01-11"]},
+            ]), encoding="utf-8")
+            day = root / "proceeding-1/2018-01-10"
+            day.mkdir(parents=True)
+            (day / "statements.json").write_text("{}", encoding="utf-8")
+            (day / "statement-1.html").write_text("<p>text</p>", encoding="utf-8")
+            report = audit_sejm_raw_coverage(Path(directory))
+        term = next(row for row in report["terms"] if row["term"] == 8)
+        self.assertEqual(term["proceedings"], 1)
+        self.assertEqual(term["dates"], 2)
+        self.assertEqual(term["statement_body_files"], 1)
 
 
 class FranceParserTests(unittest.TestCase):
