@@ -7,9 +7,11 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qs, urljoin, urlparse
 from typing import Any
+import xml.etree.ElementTree as ET
 
+from ..io import write_jsonl
 from ..models import Speech
-from .download import download_file
+from .download import download_file, fetch_bytes
 
 _BASE = "https://www.camera.it"
 _MONTHS = {"gennaio": 1, "febbraio": 2, "marzo": 3, "aprile": 4, "maggio": 5,
@@ -119,6 +121,113 @@ def download_camera_sitting(legislature: int, sitting_id: str, *,
 
 
 def parse_camera_file(path: str | Path, *, legislature: int, sitting_id: str,
-                      source_url: str) -> list[Speech]:
+                       source_url: str) -> list[Speech]:
     return parse_camera_html(Path(path).read_bytes(), legislature=legislature,
                              sitting_id=sitting_id, source_url=source_url)
+
+
+def camera_xml_url(legislature: int, sitting_id: int) -> str:
+    return ("https://documenti.camera.it/apps/commonServices/getDocumento.ashx?"
+            f"sezione=assemblea&tipoDoc=formato_xml&tipologia=stenografico&"
+            f"idNumero={sitting_id:04d}&idLegislatura={legislature}")
+
+
+def parse_camera_xml(data: bytes | str, *, source_url: str) -> list[Speech]:
+    """Use the complete official XML intervention, including virtual continuation nodes."""
+    root = ET.fromstring(data)
+    if root.tag != "seduta" or root.attrib.get("ramo") != "camera":
+        raise ValueError("not a Camera dei deputati plenary XML sitting")
+    term, sitting = root.attrib["legislatura"], root.attrib["numero"]
+    date_value = date(int(root.attrib["anno"]), int(root.attrib["mese"]), int(root.attrib["giorno"])).isoformat()
+    session = f"camera-leg{term}-sed{sitting:0>4}"
+    output: list[Speech] = []
+    for turn in root.findall(".//resoconto//intervento"):
+        node = turn.find("testoXHTML")
+        name = node.find("nominativo") if node is not None else None
+        if name is None:
+            continue
+        label = " ".join("".join(name.itertext()).split())
+        speaker_name = name.attrib.get("cognomeNome", "").strip() or label
+        raw = " ".join(" ".join("".join(part.itertext()).split()) for part in turn
+                       if part.tag in ("testoXHTML", "interventoVirtuale"))
+        # The XML nominativo is the speaker label, not spoken content. Preserve
+        # the tail after that label and all virtual continuation paragraphs.
+        first = "".join((name.tail or "", *("".join(child.itertext()) + (child.tail or "")
+                                                for child in list(node) if child is not name)))
+        if not list(node) or list(node)[0] is not name:
+            raise ValueError(f"unexpected nominativo layout in {source_url}: {turn.attrib.get('id')}")
+        first = first.lstrip(" .,:;–-\t\n")
+        rest = ["".join(part.itertext()) for part in turn.findall("interventoVirtuale")]
+        clean = " ".join(" ".join(part.split()) for part in [first, *rest] if part.strip()).strip()
+        # Parenthesized audience reactions are marked as italic in the official XML.
+        clean = re.sub(r"\s*\((?:Applausi|Commenti|Proteste|Risate)[^()]*\)", " ", clean, flags=re.I)
+        clean = " ".join(clean.split())
+        if not speaker_name or not clean:
+            continue
+        element_id = turn.attrib["id"]
+        party_match = re.match(r"^\s*\(([^()]+)\)", first)
+        if party_match:
+            clean = clean[len(party_match.group(0)):].lstrip(" .,:;–-")
+        if not clean:
+            continue
+        output.append(Speech(country="Italy", parliament="Camera dei deputati", chamber="Camera dei deputati",
+                             date=date_value, session_id=session, speech_id=f"{session}:{element_id}",
+                             speaker_id=name.attrib.get("id", ""), speaker_name=speaker_name,
+                             party=party_match.group(1) if party_match else "",
+                             speaker_role="presiding_officer" if label.casefold().startswith("presidente") else "floor_speaker",
+                             legislative_term=term, speech_text=clean, raw_text=raw,
+                             source_url=source_url + "#" + element_id, source_identifier=element_id,
+                             source_type="official_camera_stenographic_xml", text_language="it",
+                             cleaning_notes="XML nominativo label and selected audience reactions removed; virtual continuation included."))
+    return output
+
+
+def _last_sitting(term: int) -> int:
+    """Get the highest numbered sitting from the official term index."""
+    body, _ = fetch_bytes(f"https://www.camera.it/leg{term}/207")
+    numbers = [int(value) for value in re.findall(rb"idSeduta=(\d+)", body)]
+    if not numbers:
+        raise ValueError(f"no sittings on Camera term {term} official index")
+    return max(numbers)
+
+
+def build_camera_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
+                        raw_dir: str | Path = "data/raw",
+                        manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int]:
+    counts = {"records": 0, "words": 0, "sittings": 0}
+
+    def get_sitting(term: int, sitting: int) -> tuple[ET.Element, str]:
+        url = camera_xml_url(term, sitting)
+        path = Path(raw_dir) / "italy" / f"leg{term}" / f"sitting-{sitting:04d}.xml"
+        if not path.exists():
+            download_file(url, path, manifest_path=manifest_path)
+        return ET.fromstring(path.read_bytes()), url
+
+    def rows():
+        for term in (17, 18, 19):
+            last = _last_sitting(term)
+            # Electoral term 17 begins in 2013. Locate the first requested
+            # year by sitting number rather than downloading five extra years.
+            low, high = 1, last + 1
+            if term == 17:
+                while low < high:
+                    mid = (low + high) // 2
+                    root, _ = get_sitting(term, mid)
+                    if int(root.attrib["anno"]) < start_year:
+                        low = mid + 1
+                    else:
+                        high = mid
+            for sitting in range(low, last + 1):
+                root, url = get_sitting(term, sitting)
+                year = int(root.attrib["anno"])
+                if not start_year <= year <= end_year:
+                    continue
+                speeches = parse_camera_xml(ET.tostring(root), source_url=url)
+                counts["sittings"] += 1
+                for speech in speeches:
+                    counts["records"] += 1
+                    counts["words"] += speech.word_count
+                    yield speech.to_dict()
+
+    write_jsonl(output_path, rows())
+    return counts

@@ -7,7 +7,7 @@ from http.client import IncompleteRead
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
 from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links
-from parliament_ai_study.sources.italy import parse_camera_html
+from parliament_ai_study.sources.italy import parse_camera_html, parse_camera_xml
 from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml
 from parliament_ai_study.sources.sejm import parse_sejm_statement
 
@@ -121,6 +121,22 @@ class BundestagParserTests(unittest.TestCase):
 
 
 class ItalyParserTests(unittest.TestCase):
+    def test_xml_continuations_are_part_of_same_speech(self):
+        xml = '''<seduta legislatura="19" numero="711" anno="2026" mese="09" giorno="18" ramo="camera">
+          <resoconto tipo="stenografico"><intervento id="tit00020.int00020"><testoXHTML>
+          <nominativo id="302794" cognomeNome="MORASSUT Roberto">ROBERTO MORASSUT</nominativo>
+          (PD-IDP). Grazie Presidente. Parliamo della Costituzione.</testoXHTML>
+          <interventoVirtuale id="iv.4">La legge è importante per i cittadini.</interventoVirtuale>
+          <interventoVirtuale id="iv.5">(Applausi dei deputati.)</interventoVirtuale>
+          </intervento></resoconto></seduta>'''
+        rows = parse_camera_xml(xml, source_url="https://documenti.camera.it/sitting")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].party, "PD-IDP")
+        self.assertIn("La legge è importante", rows[0].speech_text)
+        self.assertNotIn("Applausi", rows[0].speech_text)
+        self.assertIn("Applausi", rows[0].raw_text)
+        self.assertEqual(rows[0].speaker_id, "302794")
+
     def test_extracts_official_italian_intervention_and_speaker_metadata(self):
         html = """<html><body><div id='divWrapper' class='stenografico'>
           <p class='centerBold'>Seduta n. 711 di venerdì 18 settembre 2026</p>
