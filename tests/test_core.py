@@ -12,6 +12,7 @@ from parliament_ai_study.io import iter_jsonl, write_jsonl
 from parliament_ai_study.models import Speech, word_count
 from parliament_ai_study.pangram import PangramClient, ResponseCache, request_fingerprint
 from parliament_ai_study.pipeline import run_pipeline, validate_processing_approval
+from parliament_ai_study.provenance import reconcile_source_manifest
 from parliament_ai_study.qa import audit_corpus_file
 from parliament_ai_study.sampling import sample_historical_controls
 from parliament_ai_study.sources.build import build_six_country_corpus
@@ -59,6 +60,33 @@ class JsonLinesTests(unittest.TestCase):
             expected = [{"id": 1}, {"id": 2, "text": "grüße"}]
             write_jsonl(path, expected)
             self.assertEqual(list(iter_jsonl(path)), expected)
+
+
+class ProvenanceTests(unittest.TestCase):
+    def test_reconcile_hashes_current_files_and_marks_unknown_source_urls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            raw = Path(directory) / "raw"
+            files = {
+                "spain/term-12/DSCD-12-PL-162.html": b"html",
+                "spain/pdf-fallback/DSCD-12-PL-162.PDF": b"%PDF",
+                "italy/leg18/sitting-0001.xml": b"<seduta/>",
+                "netherlands/verslag/abc-123.xml": b"<verslag/>",
+                "poland/term-8/proceeding-1/2018-01-01/statement-2.html": b"<p>text</p>",
+                "germany/term-19/19001.xml": b"<xml/>",
+            }
+            for relative, content in files.items():
+                path = raw / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+            manifest = Path(directory) / "source_manifest.jsonl"
+            report = reconcile_source_manifest(raw, manifest, Path(directory) / "report.json")
+            self.assertEqual(report["current_raw_files"], len(files))
+            self.assertEqual(report["unresolved_source_urls"][0]["local_path"].split("/")[-1], "19001.xml")
+            entries = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()]
+            by_name = {Path(entry["local_path"]).name: entry for entry in entries}
+            self.assertIn("DSCD-12-PL-162.html", by_name)
+            self.assertIn("statement-2.html", by_name)
+            self.assertTrue(by_name["19001.xml"]["source_url"] == "")
 
 
 class CostTests(unittest.TestCase):
