@@ -1,4 +1,5 @@
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ from parliament_ai_study.sources.netherlands import (audit_tweede_kamer_coverage
     iter_tweede_kamer_speeches, parse_tweede_kamer_xml, _odata_pages,
     _select_final_report)
 from unittest.mock import patch
-from parliament_ai_study.sources.sejm import parse_sejm_statement
+from parliament_ai_study.sources.sejm import download_sejm_date, parse_sejm_statement
 from parliament_ai_study.sources.spain import parse_congreso_html, journal_url
 
 
@@ -456,6 +457,26 @@ class SejmParserTests(unittest.TestCase):
         self.assertNotIn("Oklaski", speech.speech_text)
         self.assertIn("Oklaski", speech.raw_text)
         self.assertEqual(speech.source_identifier, speech.speech_id)
+
+    def test_parallel_date_download_preserves_statement_order_and_skips_unspoken(self):
+        metadata = {"statements": [
+            {"num": 2, "name": "Second", "memberID": 2, "function": "", "unspoken": False},
+            {"num": 1, "name": "First", "memberID": 1, "function": "", "unspoken": False},
+            {"num": 3, "name": "Skipped", "memberID": 3, "function": "", "unspoken": True},
+        ]}
+        def fake_download(url, destination, manifest_path):
+            if destination.name == "statements.json":
+                return json.dumps(metadata).encode()
+            number = int(destination.stem.split("-")[-1])
+            return f"<p>Statement number {number} has enough words for a test.</p>".encode()
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("parliament_ai_study.sources.sejm._cached_download", side_effect=fake_download):
+                rows = download_sejm_date(8, 1, "2018-01-10", raw_dir=directory,
+                                          manifest_path=Path(directory) / "manifest.jsonl",
+                                          workers=2)
+        self.assertEqual([row.speech_id.rsplit("statement", 1)[-1] for row in rows], ["1", "2"])
+        self.assertTrue(all(row.speech_id.startswith("sejm-term8-proceeding1-2018-01-10-")
+                            for row in rows))
 
 
 class FranceParserTests(unittest.TestCase):

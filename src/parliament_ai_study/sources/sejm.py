@@ -1,6 +1,7 @@
 """Polish Sejm API transcript acquisition and normalization."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 import json
 from pathlib import Path
@@ -94,31 +95,41 @@ def _cached_download(url: str, destination: Path, manifest_path: str | Path) -> 
 
 def download_sejm_date(term: int, proceeding: int, date_value: str, *,
                        raw_dir: str | Path = "data/raw",
-                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> list[Speech]:
+                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
+                       workers: int = 4) -> list[Speech]:
     """Download statement metadata and text bodies for one sitting day."""
+    if workers < 1:
+        raise ValueError("workers must be positive")
     day_dir = Path(raw_dir) / "poland" / f"term-{term}" / f"proceeding-{proceeding}" / date_value
     metadata_url = f"{API}/term{term}/proceedings/{proceeding}/{date_value}/transcripts"
     metadata_path = day_dir / "statements.json"
     metadata = json.loads(_cached_download(metadata_url, metadata_path, manifest_path))
-    results = []
-    for statement in metadata.get("statements", []):
-        if statement.get("unspoken"):
-            continue
+    statements = [statement for statement in metadata.get("statements", [])
+                  if not statement.get("unspoken")]
+
+    def fetch(statement: dict[str, Any]) -> tuple[int, Speech | None]:
         number = int(statement["num"])
         body_url = f"{metadata_url}/{number}"
         body_path = day_dir / f"statement-{number}.html"
         body = _cached_download(body_url, body_path, manifest_path)
         speech = parse_sejm_statement(body, statement, term=term, proceeding=proceeding,
                                       date_value=date_value, source_url=body_url)
-        if speech is not None:
-            results.append(speech)
-    return results
+        return number, speech
+
+    if workers == 1:
+        fetched = [fetch(statement) for statement in statements]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            fetched = list(executor.map(fetch, statements))
+    return [speech for _, speech in sorted(fetched, key=lambda item: item[0])
+            if speech is not None]
 
 
 def iter_sejm_speeches(*, start_year: int = 2018, end_year: int = 2026,
                        terms: tuple[int, ...] = TERMS,
                        raw_dir: str | Path = "data/raw",
-                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> Iterator[Speech]:
+                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
+                       workers: int = 4) -> Iterator[Speech]:
     """Fetch all plenary statement bodies in the requested years; resumable via raw-file cache."""
     for term in terms:
         list_url = f"{API}/term{term}/proceedings"
@@ -130,18 +141,21 @@ def iter_sejm_speeches(*, start_year: int = 2018, end_year: int = 2026,
                 year = int(date_value[:4])
                 if start_year <= year <= end_year:
                     yield from download_sejm_date(term, proceeding, date_value,
-                                                  raw_dir=raw_dir, manifest_path=manifest_path)
+                                                  raw_dir=raw_dir, manifest_path=manifest_path,
+                                                  workers=workers)
 
 
 def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                       terms: tuple[int, ...] = TERMS, raw_dir: str | Path = "data/raw",
-                      manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int]:
+                      manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
+                      workers: int = 4) -> dict[str, int]:
     records = words = 0
 
     def serialized():
         nonlocal records, words
         for speech in iter_sejm_speeches(start_year=start_year, end_year=end_year, terms=terms,
-                                         raw_dir=raw_dir, manifest_path=manifest_path):
+                                         raw_dir=raw_dir, manifest_path=manifest_path,
+                                         workers=workers):
             records += 1
             words += speech.word_count
             yield speech.to_dict()
@@ -158,9 +172,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, default=Path("data/processed/poland_speeches.jsonl"))
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--manifest", type=Path, default=Path("data/manifests/source_manifest.jsonl"))
+    parser.add_argument("--workers", type=int, default=4,
+                        help="bounded parallel statement-body downloads per sitting day")
     args = parser.parse_args(argv)
+    if args.workers < 1:
+        parser.error("--workers must be positive")
     stats = build_sejm_corpus(args.output, start_year=args.start_year, end_year=args.end_year,
-                              raw_dir=args.raw_dir, manifest_path=args.manifest)
+                              raw_dir=args.raw_dir, manifest_path=args.manifest,
+                              workers=args.workers)
     print(json.dumps({"country": "Poland", "output": str(args.output), **stats}, ensure_ascii=False, indent=2))
     return 0
 

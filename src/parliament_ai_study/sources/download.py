@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from http.client import IncompleteRead
+import fcntl
 import hashlib
 import json
 import os
@@ -177,6 +178,12 @@ def download_file(url: str, destination: str | Path, *, manifest_path: str | Pat
                                 retrieved_at_utc=datetime.now(timezone.utc).isoformat())
     manifest = Path(manifest_path)
     manifest.parent.mkdir(parents=True, exist_ok=True)
+    # Several bounded workers may append provenance entries concurrently.
     with manifest.open("a", encoding="utf-8") as stream:
-        stream.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        try:
+            stream.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+            stream.flush()
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
     return entry
