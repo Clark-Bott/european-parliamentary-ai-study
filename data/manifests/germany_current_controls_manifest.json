@@ -1,0 +1,13 @@
+{
+  "country": "Germany",
+  "output": "data/controls/germany_historical_sample.jsonl",
+  "sha256": "fcf8ea329284fe2c39f3431f99fa93b9d4419e6dcdc9ddfc21651b6cae65b0f6",
+  "records": 1000,
+  "words": 300909,
+  "seed": 2026,
+  "year_counts": {"2018": 250, "2019": 250, "2020": 250, "2021": 250},
+  "missing_party_records": 114,
+  "max_records_per_identified_speaker": 2,
+  "list_price_usd_at_0_05_per_unit": 172.80,
+  "note": "Historical CPP-BT sample for detector calibration, not authorship ground truth. No Pangram inference performed; text Git-ignored."
+}

@@ -27,4 +27,6 @@ A Dutch 2018–2021 sample yielded only **658 records / 216,665 words** (136, 14
 
 A Spanish 2018–2021 sample contains **1,000 records / 373,221 words**, exactly 250 records in each year. It is stored in ignored `data/controls/spain_historical_sample.jsonl` (SHA-256 `ece52dfaeb64b496dc8f63e020e44bdf8470fac648d83c0845917568070a6f2c`) with an estimated list price of **$210.80**. The current Diario source supplies no party or stable speaker ID, so all 1,000 records have both fields missing; the sampler uses immutable speech IDs for the speaker cap. Two official journals remain outside this parser, as documented in [Spanish corpus QA](spain_corpus_qa.md). No inference was performed.
 
-These samples are detector-calibration controls, not ground truth about human authorship or a measured false-positive rate. No comparable completed historical sample exists yet for Germany or Poland.
+A German 2018–2021 sample was generated from the verified CPP-BT baseline: **1,000 records / 300,909 words**, exactly 250 records in each year. It is stored in ignored `data/controls/germany_historical_sample.jsonl` (SHA-256 `fcf8ea329284fe2c39f3431f99fa93b9d4419e6dcdc9ddfc21651b6cae65b0f6`); 114 records lack party metadata, no identified speaker appears more than twice, and the list-price estimate is **$172.80**. See [German corpus QA](germany_corpus_qa.md). No inference was performed.
+
+These samples are detector-calibration controls, not ground truth about human authorship or a measured false-positive rate. No comparable completed historical sample exists yet for Poland.
