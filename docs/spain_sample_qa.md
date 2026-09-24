@@ -1,0 +1,5 @@
+# Congreso sample QA — Diario 204, 15 September 2026
+
+The [official chronological intervention open-data JSON](https://www.congreso.es/es/opendata/intervenciones) lists speaker and timing metadata but does **not** contain speech text. The linked official `mostrarTextoIntegro` Diario contains a synopsis followed by verbatim remarks. We downloaded Diario `DSCD-15-PL-204` (450,857 bytes) and extracted **134 attributed speaker turns / 53,459 cleaned words** from the verbatim section only. The document date is 15 September 2026; all 134 IDs are unique. The source URL and checksum are in `data/manifests/source_manifest.jsonl`.
+
+The parser segments on the Diario's `La señora ...:` and `El señor ...:` labels. This preserves the original rendered speech language, but generic role labels such as `PRESIDENTA` are **not resolved to person IDs**. Party fields are unknown, not imputed. The source text, date, and speaker labels were checked for this one journal; embedded agenda headings, speaker ambiguity, and the synopsis boundary require randomized manual review before paid inference. The historical build discovers journals in terms XII–XV. No Pangram request was made.

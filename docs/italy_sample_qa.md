@@ -1,17 +1,7 @@
-# Camera dei deputati sample QA — one sitting only
+# Camera sample QA — sitting 711, 18 September 2026
 
-The official Camera stenographic HTML page for legislature 19, sitting 711 (Friday 18 September 2026) was downloaded from `https://www.camera.it/leg19/410?idSeduta=0711&tipo=stenografico` and parsed for paragraphs with the official `intervento` class.[18] Speaker labels link to official deputy pages; the parser retains paragraph IDs, speaker profile IDs where available, source URLs, and both the raw paragraph text and cleaned text without the linked speaker-label prefix.
+The initial HTML adapter returned 47 paragraph records / 1,808 words. **That was incomplete:** most of each intervention is in separate continuation elements. It must not be used for inference. The official `formato_xml` sitting record contains `<intervento><testoXHTML>` followed by `<interventoVirtuale>` paragraphs. The replacement XML adapter includes these continuations in the same attributed turn.
 
-| Check | Result |
-|---|---:|
-| Sitting date | 2026-09-18 |
-| Raw HTML bytes | 178,670 |
-| Parsed interventions | 47 |
-| Unique normalized IDs | 47 |
-| Words | 1,808 |
-| Under 40 words | 33 |
-| Empty text / missing provenance | 0 / 0 |
+The official XML for term 19, sitting 711 was downloaded again on 2026-09-24. The corrected extraction contains **47 interventions and 15,203 words** (before the 40-word eligibility rule), with no repeated intervention IDs. Its URL, size (130,885 bytes), retrieval time, and SHA-256 are in `data/manifests/source_manifest.jsonl`. For example, `MORASSUT Roberto`'s intervention `tit00020.sub00010.int00020` contains 1,192 words across `<testoXHTML>` and `<interventoVirtuale>` elements. The [official rendered record](https://www.camera.it/leg19/410?idSeduta=0711&tipo=stenografico) displays the same name and opening “Grazie Presidente. Come è noto…”.
 
-Normalized output is local at `data/processed/italy_sample_2026-09-18.jsonl`; downloaded HTML is under ignored `data/raw/italy/`. Raw URL and checksum are in `data/manifests/source_manifest.jsonl`.
-
-This checks a single live page and verifies one chair label plus paragraph extraction; it is not a random manual sample audit. The full sitting index, historical 2018–2026 acquisition, party/role enrichment, and reuse terms have not been established. The source page is public, but no broad redistribution or third-party processing license is asserted here. No Pangram inference was run.
+The index at `https://www.camera.it/leg19/207` supplies the current maximum sitting number; the build covers terms 17–19 and finds the 2018 start within term 17. This is one source comparison, **not** random validation of all terms. The XML parser's speaker role, party, and stage-direction rules need more review. The downloaded file is ignored by Git but is reproducible. No Pangram request was made.

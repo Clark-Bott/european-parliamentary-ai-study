@@ -1,0 +1,5 @@
+# Bundestag sample QA — 23 September 2026
+
+The official Open Data XML list on `https://www.bundestag.de/services/opendata` exposed term 21 protocol `21095.xml`. A download from `https://www.bundestag.de/resource/blob/1217366/21095.xml` (908,426 bytes) parsed into **190 attributed speech turns / 43,805 cleaned words**. The XML root gives `sitzung-datum=23.09.2026`, `wahlperiode=21`, `sitzung-nr=95`; the first `<rede id="ID219500100">` identifies Dr. Irene Mihalic (BÜNDNIS 90/DIE GRÜNEN) and opens “Sehr geehrte Frau Präsidentin! Meine Damen und Herren!”. Its separate `<kommentar>` nodes are not sent for inference. The parser also reads nested `rolle/rolle_lang` labels, including a minister's title.
+
+All 190 normalized IDs are unique for this one sitting. The original XML and manifest checksum are under ignored `data/raw/germany/` and tracked `data/manifests/source_manifest.jsonl`. The official page listing and XML were compared for date, speaker, and opening text; the extraction has **not** been randomly audited across the 19th, 20th, or 21st terms. It is not evidence of full 2018–2026 coverage. No Pangram request was made.
