@@ -14,7 +14,8 @@ The project is motivated by The Economist's September 2026 article, “AI-writte
 - FRANCE QA: 0 duplicate speech IDs, 0 empty records, and 0 missing provenance fields in the streamed check; one official webpage sample was manually compared; full manual sampling, text-boundary audit, duplicate-text review, and review of an over-10,000-word record remain outstanding
 - POLAND: official API enumeration and per-statement HTML downloader/parser implemented; one 2023-11-13 sitting sample yielded 43 interventions and 19,291 words; the full historical corpus and country QA have not been run
 - NETHERLANDS: OData final-report adapter/parser implemented; one corrected 2025-03-19 plenary report yielded 308 interventions and 55,561 words; full historical acquisition and country QA have not been run ([sample QA](docs/netherlands_sample_qa.md))
-- GERMANY, ITALY, SPAIN: no complete acquisition/parser adapter yet
+- ITALY: explicit-sitting HTML downloader/parser implemented; one 2026-09-18 sitting yielded 47 interventions and 1,808 words; full session index and historical corpus are not ready ([sample QA](docs/italy_sample_qa.md))
+- GERMANY, SPAIN: no complete acquisition/parser adapter yet
 - PANGRAM CLIENT: async task client, request fingerprint cache, resume state, opt-in paid-run guard, and mocked tests implemented; no live request made
 - COST CONTROL: configurable estimator implemented; default Pangram 4 price is an estimate from the current public developer page, not an account quote
 - ANALYSIS: aggregation, tables, SVG figures, and report generation implemented; exercised on synthetic smoke data only

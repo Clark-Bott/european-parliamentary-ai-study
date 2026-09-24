@@ -6,6 +6,7 @@ from http.client import IncompleteRead
 
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
+from parliament_ai_study.sources.italy import parse_camera_html
 from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml
 from parliament_ai_study.sources.sejm import parse_sejm_statement
 
@@ -93,6 +94,27 @@ class ManifestTests(unittest.TestCase):
                           sleep=lambda _: None)
             self.assertEqual(target.read_bytes(), payload)
             self.assertEqual(requested, ["bytes=0-0", "bytes=0-3", "bytes=4-7", "bytes=8-9"])
+
+
+class ItalyParserTests(unittest.TestCase):
+    def test_extracts_official_italian_intervention_and_speaker_metadata(self):
+        html = """<html><body><div id='divWrapper' class='stenografico'>
+          <p class='centerBold'>Seduta n. 711 di venerdì 18 settembre 2026</p>
+          <p class='intervento' id='sed0711.stenografico.tit00000.int00010'>
+            <a href='?idPersona=305704' title='Vai alla scheda personale: ASCANI Anna'>PRESIDENTE</a>. La seduta è aperta.</p>
+          <p class='intervento' id='sed0711.stenografico.tit00020.int00010'>
+            <a href='?idPersona=100' title='Vai alla scheda personale: ROSSI Mario'>ROSSI Mario</a>. Grazie, colleghi, per il lavoro svolto.</p>
+        </div></body></html>"""
+        speeches = parse_camera_html(html, legislature=19, sitting_id="0711",
+                                    source_url="https://www.camera.it/leg19/410?idSeduta=0711&tipo=stenografico")
+        self.assertEqual(len(speeches), 2)
+        self.assertEqual(speeches[0].date, "2026-09-18")
+        self.assertEqual(speeches[0].speaker_id, "305704")
+        self.assertEqual(speeches[0].speaker_name, "ASCANI Anna")
+        self.assertEqual(speeches[0].speaker_role, "presiding_officer")
+        self.assertEqual(speeches[0].speech_text, "La seduta è aperta.")
+        self.assertIn("PRESIDENTE", speeches[0].raw_text)
+        self.assertEqual(speeches[1].speech_text, "Grazie, colleghi, per il lavoro svolto.")
 
 
 class NetherlandsParserTests(unittest.TestCase):
