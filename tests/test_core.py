@@ -45,6 +45,13 @@ class JsonLinesTests(unittest.TestCase):
 
 
 class CostTests(unittest.TestCase):
+    def test_rounds_each_speech_up_to_a_started_billable_block(self):
+        rows = [{"country": "Italy", "date": "2024-01-01", "word_count": 101},
+                {"country": "Italy", "date": "2024-01-02", "word_count": 101}]
+        cost = estimate_cost(rows, price_per_1000_words=0.5)
+        self.assertEqual(cost["estimated_api_units"], 4)
+        self.assertAlmostEqual(cost["estimated_cost"], 0.20)
+
     def test_estimate_cost_filters_country_and_year_and_groups(self):
         speeches = [
             {"country": "Germany", "date": "2019-01-01", "word_count": 1000},

@@ -46,7 +46,9 @@ def estimate_cost(
             continue
         counts[item_country]["speeches"] += 1
         counts[item_country]["words"] += words
-        units = words / billing_unit_words
+        # Pangram bills one *started* word block per item, not fractional
+        # blocks across the combined corpus. Each intervention is one task.
+        units = math.ceil(words / billing_unit_words)
         counts[item_country]["estimated_api_units"] += units
         total_speeches += 1
         total_words += words
@@ -54,9 +56,9 @@ def estimate_cost(
     rows = []
     for name, values in sorted(counts.items()):
         rows.append({"country": name, **values,
-                     "estimated_cost": values["words"] * price_per_1000_words / 1000})
+                      "estimated_cost": values["estimated_api_units"] * billing_unit_words * price_per_1000_words / 1000})
     return {"rows": rows, "speeches": total_speeches, "words": total_words,
             "estimated_api_units": total_units,
-            "estimated_cost": total_words * price_per_1000_words / 1000,
+            "estimated_cost": total_units * billing_unit_words * price_per_1000_words / 1000,
             "price_per_1000_words": price_per_1000_words,
             "billing_unit_words": billing_unit_words}
