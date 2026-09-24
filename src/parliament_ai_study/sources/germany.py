@@ -21,13 +21,13 @@ from .download import download_file, fetch_bytes
 BASE = "https://www.bundestag.de"
 # IDs are the XML-only document lists on the Bundestag's Open Data page.
 LIST_IDS = {19: "543410-543410", 20: "866354-866354", 21: "1058442-1058442"}
-CPP_BT_ARCHIVE = "CPP-BT_2026-01-17_DE_CSV_Reden_Gesamt.zip"
-CPP_BT_URL = ("https://zenodo.org/api/records/18177196/files/"
-              "CPP-BT_2026-01-17_DE_CSV_Reden_Gesamt.zip/content")
-CPP_BT_MEMBER = "CPP-BT_2026-01-17_DE_CSV_Reden_Gesamt.csv"
-CPP_BT_MD5 = "9b03325c65c6930bc5e44d4206ce3d42"
-CPP_BT_DOI = "10.5281/zenodo.18177196"
-CPP_BT_CUTOFF = "2026-01-17"
+CPP_BT_ARCHIVE = "CPP-BT_2026-09-19_DE_CSV_Reden_Gesamt.zip"
+CPP_BT_URL = ("https://zenodo.org/api/records/22844952/files/"
+              "CPP-BT_2026-09-19_DE_CSV_Reden_Gesamt.zip/content")
+CPP_BT_MEMBER = "CPP-BT_2026-09-19_DE_CSV_Reden_Gesamt.csv"
+CPP_BT_MD5 = "7d6b326ecf86adcff7c7d655adcee0f0"
+CPP_BT_DOI = "10.5281/zenodo.22844952"
+CPP_BT_CUTOFF = "2026-09-19"
 LIST_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Referer": f"{BASE}/services/opendata",

@@ -6,7 +6,7 @@ Review date: 2026-09-24. This is an engineering evidence record, not legal advic
 
 | Country | Verified public evidence | Engineering status before paid processing |
 |---|---|---|
-| Germany | CPP-BT version 2026-01-17 is published under CC0 1.0 and states that the underlying plenary protocols are official works. The official Bundestag remains the primary source. | **Conditionally cleared for the verified CPP-BT baseline.** Cite the CPP-BT DOI and Bundestag source. Post-2026-01-17 XML remains a coverage gap. |
+| Germany | CPP-BT version 2026-09-19 is published under CC0 1.0 and states that the underlying plenary protocols are official works. The official Bundestag remains the primary source. | **Conditionally cleared for the verified CPP-BT baseline.** Cite the CPP-BT DOI and Bundestag source. Post-2026-09-19 XML remains a coverage gap. |
 | France | The Assemblée nationale open-data portal applies the Licence Ouverte / Open Licence. It allows reproduction, redistribution, adaptation, and commercial use, with mandatory source attribution. | **Conditionally cleared.** Preserve source attribution and archive version/date. |
 | Netherlands | The Tweede Kamer Open Data Portal disclaimer applies CC0 1.0 to API data unless otherwise indicated. It permits sharing and modification, including commercial use. | **Conditionally cleared.** Check for record-specific markings or restrictions before redistribution. |
 | Italy | The Camera RDF dataset for sittings and stenographic reports is marked CC BY-SA 4.0. The project reads a separate `documenti.camera.it` rendered XML endpoint. | **Unresolved.** The RDF license has not been shown to govern the separate XML endpoint and the Pangram processing purpose. Obtain written confirmation or use a clearly covered source. |
@@ -65,7 +65,7 @@ Until those items exist, the repository must not submit text. The machine-readab
 
 ## Public evidence
 
-- Germany CPP-BT: https://doi.org/10.5281/zenodo.18177196
+- Germany CPP-BT: https://doi.org/10.5281/zenodo.22844952
 - France open licence: https://data.assemblee-nationale.fr/licence-ouverte-open-licence
 - Netherlands disclaimer: https://opendata.tweedekamer.nl/disclaimer
 - Italy dataset record: https://dati.camera.it/dataset/sedute-e-resoconti-stenografici-delle-legislature-precedenti

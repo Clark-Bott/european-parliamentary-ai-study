@@ -231,7 +231,7 @@ class BundestagParserTests(unittest.TestCase):
         self.assertEqual(row.speaker_name, "Dr. Erika Example")
         self.assertEqual(row.party, "CDU/CSU")
         self.assertEqual(row.speech_text, "Vielen Dank, Herr Präsident. (Beifall)")
-        self.assertIn("zenodo.18177196", row.source_url)
+        self.assertIn("zenodo.22844952", row.source_url)
 
     def test_protocol_list_uses_official_limit_and_html_headers(self):
         requests = []
