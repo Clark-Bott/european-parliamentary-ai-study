@@ -12,6 +12,12 @@ from parliament_ai_study.io import iter_jsonl, write_jsonl
 from parliament_ai_study.models import Speech, word_count
 from parliament_ai_study.pangram import PangramClient, ResponseCache, request_fingerprint
 from parliament_ai_study.pipeline import run_pipeline, validate_processing_approval
+from parliament_ai_study.positive_controls import (
+    evaluate_positive_controls,
+    import_controls,
+    load_controls,
+    normalize_record,
+)
 from parliament_ai_study.provenance import reconcile_source_manifest
 from parliament_ai_study.qa import audit_corpus_file
 from parliament_ai_study.sampling import sample_historical_controls
@@ -546,6 +552,72 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("MOCKED PIPELINE", report)
             self.assertNotIn("Pangram inference outputs", report)
             self.assertTrue((base / "out/processed/mock_results.jsonl").is_file())
+
+
+class PositiveControlTests(unittest.TestCase):
+    def _record(self, **overrides):
+        record = {"country": "Spain", "text_language": "es", "generator": "test-llm",
+                  "prompt_id": "p1", "text": "Señor Presidente, esta enmienda mejora el texto."}
+        record.update(overrides)
+        return record
+
+    def test_normalization_labels_a_passage_as_synthetic_and_strips_source_fields(self):
+        record = normalize_record(self._record(), 0)
+        self.assertTrue(record["synthetic_control"])
+        self.assertEqual(record["source_type"], "synthetic_positive_control")
+        self.assertTrue(record["speech_id"].startswith("positive-control-es-"))
+        self.assertEqual(record["parliament"], "Congreso de los Diputados")
+
+    def test_validation_rejects_missing_fields_and_official_looking_records(self):
+        with self.assertRaises(ValueError):
+            normalize_record(self._record(generator=""), 0)
+        with self.assertRaises(ValueError):
+            normalize_record(self._record(text_language="fr"), 0)
+        with self.assertRaises(ValueError):
+            normalize_record(self._record(source_url="https://example.test/official"), 0)
+        with self.assertRaises(ValueError):
+            normalize_record(self._record(country="Belgium"), 0)
+
+    def test_import_writes_every_supplied_passage_and_load_revalidates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = Path(directory) / "raw.jsonl", Path(directory) / "controls.jsonl"
+            write_jsonl(source, [self._record(), self._record(prompt_id="p2")])
+            records = import_controls(source, output)
+            self.assertEqual(len(records), 2)
+            self.assertEqual(len(load_controls(output)), 2)
+
+    def test_evaluation_reports_detection_rate_per_language(self):
+        controls = [normalize_record(self._record(prompt_id="p1"), 0),
+                    normalize_record(self._record(prompt_id="p2", country="Poland",
+                                                   text_language="pl"), 1)]
+        responses = {control["speech_id"]: {"fraction_ai": 0.9, "fraction_ai_assisted": 0.05}
+                     for control in controls}
+        rows, summary = evaluate_positive_controls(
+            controls, lambda control: responses[control["speech_id"]])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([group["country"] for group in summary], ["Poland", "Spain"])
+        for group in summary:
+            self.assertEqual(group["detection_rate"], 1.0)
+            self.assertAlmostEqual(group["mean_ai_fraction"], 0.9)
+
+    def test_dry_run_writes_a_positive_control_table_when_controls_exist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            controls = base / "positive_controls.jsonl"
+            write_jsonl(controls, [self._record()])
+            corpus = base / "corpus.jsonl"
+            write_jsonl(corpus, [{
+                "country": "Germany", "parliament": "Bundestag", "chamber": "lower",
+                "date": "2024-01-01", "session_id": "1", "speech_id": "s1",
+                "speaker_id": "m1", "speaker_name": "Test", "speech_text": "Hallo Welt",
+                "word_count": 2, "source_identifier": "s1",
+                "source_url": "https://example.test/s1"}])
+            summary = run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=True,
+                                   price_per_1000_words=0.5, model="pangram-4",
+                                   positive_controls=controls)
+            self.assertTrue(summary["positive_controls"]["prepared"])
+            self.assertTrue((base / "out/tables/positive_controls.csv").is_file())
+            self.assertTrue((base / "out/reports/positive_controls.json").is_file())
 
 
 if __name__ == "__main__":

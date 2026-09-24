@@ -16,6 +16,7 @@ from .cost import estimate_cost
 from .io import iter_jsonl, write_jsonl
 from .models import Speech
 from .pangram import PangramClient, ResponseCache, request_fingerprint
+from .positive_controls import evaluate_positive_controls, load_controls
 from .qa import COUNTRIES, audit_corpus_file
 
 
@@ -131,7 +132,8 @@ def _write_outputs(corpus_path: str | Path,
                    response_for_speech: Callable[[dict[str, Any]], dict[str, Any]],
                    results_dir: Path, *, model: str, synthetic: bool, mocked: bool,
                    qa: dict[str, Any], estimate: dict[str, Any],
-                   response_min_words: int) -> dict[str, Any]:
+                   response_min_words: int,
+                   positive_controls_path: str | Path | None = None) -> dict[str, Any]:
     tables = results_dir / "tables"
     figures = results_dir / "figures"
     reports = results_dir / "reports"
@@ -183,6 +185,19 @@ def _write_outputs(corpus_path: str | Path,
                                     max(0.0, row["ai_word_share"] - baseline_rate)
                                     if baseline_rate is not None else None})
     _write_csv(tables / "sensitivity.csv", sensitivity)
+    # Optional Phase 8 calibration: synthetic LLM passages are scored only if
+    # the researcher has prepared them; their absence is not an error.
+    positive_controls: dict[str, Any] = {"prepared": False}
+    if positive_controls_path is not None and Path(positive_controls_path).is_file():
+        controls = load_controls(positive_controls_path)
+        passage_rows, language_rows = evaluate_positive_controls(
+            controls, lambda record: response_for_speech(record))
+        _write_csv(tables / "positive_controls.csv", language_rows)
+        positive_controls = {"prepared": True, "file": str(positive_controls_path),
+                             "records": len(controls), "by_language": language_rows}
+        (reports / "positive_controls.json").write_text(
+            json.dumps(positive_controls, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8")
     _write_svg(figures / "all_countries.svg", periods["month"],
                title="Pangram-classified AI-generated word share by month" + (" (MOCKED)" if mocked else ""))
     for country in COUNTRIES:
@@ -211,6 +226,7 @@ def _write_outputs(corpus_path: str | Path,
     (reports / ("dry_run_report.md" if mocked else "results_report.md")).write_text("\n".join(report) + "\n", encoding="utf-8")
     return {"synthetic_smoke_test": synthetic, "mocked": mocked, "speeches": qa["records"], "words": estimate["words"],
             "estimated_cost": estimate["estimated_cost"], "countries": qa["countries_present"],
+            "positive_controls": positive_controls,
             "errors": qa["errors"], "warnings": qa["warnings"], "results_dir": str(results_dir)}
 
 
@@ -290,7 +306,9 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  dry_run: bool, price_per_1000_words: float, model: str,
                  confirm_paid_run: bool = False, api_key: str | None = None,
                  gap_reports: str | Path | Iterable[str | Path] | None = None,
-                 processing_approval: str | Path | None = None) -> dict[str, Any]:
+                 processing_approval: str | Path | None = None,
+                 positive_controls: str | Path | None = Path(
+                     "data/controls/positive_controls.jsonl")) -> dict[str, Any]:
     """Run the deterministic mock workflow or authorized Pangram inference."""
     target = Path(results_dir)
     synthetic = False
@@ -367,7 +385,26 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                 raise
         response_for_speech = lambda speech: _cached_response(cache, model, speech)
         response_min_words = 40
+        # Synthetic positive controls are billed like any other text and are
+        # submitted through the same fingerprint cache, so a restart never
+        # pays for one twice.
+        if positive_controls is not None and Path(positive_controls).is_file():
+            for index, control in enumerate(load_controls(positive_controls), 1):
+                print(f"Pangram positive control {index}: {control['speech_id']}")
+                try:
+                    client.analyze(str(control["speech_text"]), cache, allow_paid=True)
+                except Exception as exc:
+                    log = target / "reports" / "pangram_errors.jsonl"
+                    log.parent.mkdir(parents=True, exist_ok=True)
+                    with log.open("a", encoding="utf-8") as stream:
+                        stream.write(json.dumps({
+                            "at_utc": datetime.now(timezone.utc).isoformat(),
+                            "speech_id": control["speech_id"],
+                            "error_type": type(exc).__name__, "message": str(exc)},
+                            ensure_ascii=False) + "\n")
+                    raise
 
     return _write_outputs(corpus_path, response_for_speech, target, model=model,
                           synthetic=synthetic, mocked=dry_run, qa=qa, estimate=estimate,
-                          response_min_words=response_min_words)
+                          response_min_words=response_min_words,
+                          positive_controls_path=positive_controls)

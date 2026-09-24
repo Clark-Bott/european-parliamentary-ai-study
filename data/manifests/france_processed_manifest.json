@@ -109,5 +109,8 @@
     "All source paragraphs with attribution and text are retained, including short and procedural turns.",
     "A 40-word minimum is a transparent project choice, not a reconstructed Economist rule.",
     "No Pangram inference was performed."
-  ]
+  ],
+  "status": "superseded",
+  "superseded_by": "data/manifests/france_current_manifest.json",
+  "note": "Earlier build (1,243,388 records / 75,364,490 words). The current rebuild emits 1,243,606 records / 75,392,623 words; see docs/corpus_qa.md for the documented discrepancy. Kept for provenance; do not use for corpus statistics."
 }

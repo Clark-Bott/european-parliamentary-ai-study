@@ -8,6 +8,16 @@ The project is motivated by The Economist's September 2026 article, “AI-writte
 
 ## Current status — be precise
 
+```text
+DATA COLLECTION:        IN PROGRESS — five official corpora collected and built locally; Poland acquisition running; post-2026-09-19 German XML blocked by Enodia verification
+PARSING:                COMPLETE for Germany, France, Netherlands, Italy, Spain; Poland parser implemented, full build pending
+NORMALIZATION:          COMPLETE for the five built corpora; common schema, source URLs, and source-language text retained
+VALIDATION:             PARTIAL — automated full-file integrity QA passed for all five built corpora; random manual source-boundary review outstanding
+PANGRAM INTEGRATION:    COMPLETE — client, fingerprint cache, resume, duplicate-billing and paid-run guards, mocked tests
+ANALYSIS PIPELINE:      COMPLETE — tables, figures, sensitivity and control analyses implemented and exercised on mocked detector output
+FULL PANGRAM INFERENCE: NOT RUN — blocked by API key, recorded source gaps, coverage completion, and rights/approval review
+```
+
 - RESEARCH RECONNAISSANCE: partial; primary Economist method disclosure is still inaccessible
 - FRANCE ARCHIVE COLLECTION: official 15th–17th legislature Syceron ZIPs were downloaded and checksum-verified locally; they are not in Git and must be downloaded in a fresh clone
 - FRANCE PARSING/NORMALIZATION: current local rebuild emitted 1,243,606 intervention records / 75,392,623 words through 2026-07-21; disk-backed full-file audit passed, but found 389,687 repeated text hashes, mostly formulaic short turns. Random source-boundary QA remains outstanding.
@@ -20,7 +30,8 @@ The project is motivated by The Economist's September 2026 article, “AI-writte
 - SPAIN: official Diario build emitted 101,069 records / 28,139,144 words from 583 journals, including 252 and 148 turns recovered from two official PDF-only journals with the pypdf fallback; page-boundary regression and disk-backed integrity QA passed. Speaker/party enrichment and random source-boundary review remain outstanding ([build QA](docs/spain_corpus_qa.md); [sample QA](docs/spain_sample_qa.md)).
 - SIX-COUNTRY BUILD: acquisition adapters and a combined-corpus builder exist; the full 2018–2026 acquisition and random manual QA have **not** been completed. An earlier Dutch 90,706-record build was incomplete because the OData server omitted a pagination link; explicit skip pagination is implemented, but that file must not be used as complete. Spanish numbered-journal gaps are recorded and block paid submission.
 - PANGRAM CLIENT: async task client, request fingerprint cache, resume state, opt-in paid-run guard, and mocked tests implemented; no live request made
-- COST CONTROL: per-item rounded estimator implemented; local length-eligible estimates are **$42,397.05** for France, **$17,802.00** for Germany, **$26,924.80** for Italy, **$26,680.00** for the unreconciled Dutch corpus, and **$14,862.70** for the Spanish corpus including PDF fallbacks. None is an account quote or a validated six-country total.
+- COST CONTROL: per-item rounded estimator implemented; local length-eligible estimates are **$42,397.05** for France, **$17,802.00** for Germany, **$26,924.80** for Italy, **$26,680.00** for the reconciled Dutch corpus, and **$14,862.70** for the Spanish corpus including PDF fallbacks. None is an account quote or a validated six-country total.
+- POSITIVE CONTROLS: optional Phase 8 design implemented — per-language generation briefs, validation that keeps synthetic text out of real corpora, cached submission, and a per-language detection table. No passages generated yet ([method](docs/positive_controls.md))
 - ANALYSIS: aggregation, tables, SVG figures, and report generation implemented; exercised on synthetic smoke data only
 - FULL INFERENCE: NOT RUN; no paid API call was made
 

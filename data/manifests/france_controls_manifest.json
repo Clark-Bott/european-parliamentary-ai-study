@@ -17,13 +17,25 @@
     "sha256": "8f7c9e4dfcee087e86817cfbffb6360c341d0257706c209d872d217ba90ec36d",
     "records": 1000,
     "words": 227069,
-    "records_by_year": {"2018": 250, "2019": 250, "2020": 250, "2021": 250},
-    "records_by_length_band": {"short_40_99": 334, "medium_100_249": 333, "long_250_plus": 333},
+    "records_by_year": {
+      "2018": 250,
+      "2019": 250,
+      "2020": 250,
+      "2021": 250
+    },
+    "records_by_length_band": {
+      "short_40_99": 334,
+      "medium_100_249": 333,
+      "long_250_plus": 333
+    },
     "distinct_non_sentinel_speakers": 471,
     "maximum_non_sentinel_speaker_reuse": 2,
     "sentinel_or_missing_speaker_id_rows": 215,
     "unknown_party_rows": 775,
     "estimated_pangram4_list_cost_usd_at_0_50_per_1000_words": 113.5345
   },
-  "interpretation": "Historical detector calibration sample only; not ground truth. No inference was run."
+  "interpretation": "Historical detector calibration sample only; not ground truth. No inference was run.",
+  "status": "superseded",
+  "superseded_by": "data/manifests/france_current_controls_manifest.json",
+  "note": "Points at control files that no longer exist on disk. The current French control sample is data/controls/france_historical_sample.jsonl, recorded in data/manifests/france_current_controls_manifest.json."
 }

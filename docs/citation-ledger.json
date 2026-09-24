@@ -138,6 +138,12 @@
       "url": "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/Verslag(3c34d93e-6ef7-4cfb-8fbe-adec483d6b60)/resource",
       "title": "Tweede Kamer corrected final transcript XML sample",
       "accessed": "2026-09-24"
+    },
+    {
+      "id": 24,
+      "url": "https://doi.org/10.5281/zenodo.22844952",
+      "title": "Corpus der Plenarprotokolle des Deutschen Bundestages (CPP-BT), version 2026-09-19, CC0",
+      "accessed": "2026-09-24"
     }
   ]
 }
