@@ -1,0 +1,19 @@
+{
+  "country": "Netherlands",
+  "output": "data/processed/netherlands_speeches.jsonl",
+  "sha256": "773a947b6f644c372c4ae4dd42372dc486291de3f169e60855bf4664febab614",
+  "bytes": 863873412,
+  "retrieval_date": "2026-09-24",
+  "records": 344220,
+  "words": 46237076,
+  "distinct_parsed_sessions": 903,
+  "previous_listing_meetings": 919,
+  "eligible_min_words": 40,
+  "eligible_records": 193384,
+  "eligible_words": 44216057,
+  "billable_units_100_words": 533600,
+  "list_price_usd_at_0_05_per_unit": 26680.00,
+  "duplicate_speech_ids": 0,
+  "duplicate_text_hashes_all_lengths": 39754,
+  "note": "The 919-meeting listing and 903 parsed reports have not been reconciled. No completeness, source-boundary, or reuse-rights sign-off; corpus is Git-ignored."
+}

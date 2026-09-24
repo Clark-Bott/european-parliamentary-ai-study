@@ -347,7 +347,27 @@ class PipelineTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "country/year coverage"):
                 run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
                              confirm_paid_run=True, api_key="fake-key", model="pangram-4",
-                             price_per_1000_words=0.5)
+                             price_per_1000_words=0.5,
+                             gap_report=base / "missing-gaps.json")
+            self.assertFalse((base / "out/raw_pangram").exists())
+
+    def test_paid_mode_rejects_recorded_source_gaps_after_coverage_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            corpus = base / "covered.jsonl"
+            records = [{"country": country, "date": f"{year}-01-01",
+                        "word_count": 40, "speech_id": f"{country}-{year}",
+                        "speech_text": "text " * 40, "source_identifier": "s",
+                        "source_url": "https://example.test/s"}
+                       for country in ("Germany", "France", "Netherlands", "Italy", "Spain", "Poland")
+                       for year in range(2018, 2026)]
+            write_jsonl(corpus, records)
+            gaps = base / "gaps.json"
+            write_jsonl(gaps, [{"term": 12, "number": 162}])
+            with self.assertRaisesRegex(ValueError, "unresolved official journal gaps"):
+                run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
+                             confirm_paid_run=True, api_key="fake-key", model="pangram-4",
+                             price_per_1000_words=0.5, gap_report=gaps)
             self.assertFalse((base / "out/raw_pangram").exists())
 
     def test_mock_dry_run_creates_outputs_for_all_six_countries(self):

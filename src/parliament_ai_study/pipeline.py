@@ -209,7 +209,8 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
 
 def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  dry_run: bool, price_per_1000_words: float, model: str,
-                 confirm_paid_run: bool = False, api_key: str | None = None) -> dict[str, Any]:
+                 confirm_paid_run: bool = False, api_key: str | None = None,
+                 gap_report: str | Path | None = None) -> dict[str, Any]:
     """Run the deterministic mock workflow or authorized Pangram inference."""
     target = Path(results_dir)
     synthetic = False
@@ -234,13 +235,13 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
     if qa["errors"]:
         raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
     if not dry_run:
-        gap_report = Path("data/manifests/spain_unavailable_journals.json")
-        if gap_report.is_file() and json.loads(gap_report.read_text(encoding="utf-8")):
-            raise ValueError(f"unresolved official journal gaps recorded in {gap_report}; no paid submission")
         missing = [f"{country}:{year}" for country in COUNTRIES for year in range(2018, 2027)
                    if year != 2026 and not qa["country_year_counts"].get(f"{country}:{year}")]
         if missing:
             raise ValueError("paid six-country run requires country/year coverage; missing " + ", ".join(missing))
+        gaps_path = Path(gap_report or "data/manifests/spain_unavailable_journals.json")
+        if gaps_path.is_file() and json.loads(gaps_path.read_text(encoding="utf-8")):
+            raise ValueError(f"unresolved official journal gaps recorded in {gaps_path}; no paid submission")
     estimate = estimate_cost(speeches, price_per_1000_words=price_per_1000_words)
     print(f"Corpus: {len(speeches)} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
     if dry_run:

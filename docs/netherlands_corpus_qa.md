@@ -1,0 +1,7 @@
+# Netherlands local corpus build and integrity QA — 2026-09-24
+
+The corrected OData adapter used explicit `$skip` pagination because the official server did not provide a next link for a full 250-item page. A previous build stopped after 90,706 records; **do not use that file**. The rebuilt `data/processed/netherlands_speeches.jsonl` contains **344,220 interventions / 46,237,076 words** from **903 distinct parsed reports**. The full-file disk-backed audit found zero duplicate speech IDs or integrity errors, and 39,754 repeated normalized-text hashes. Each year from 2018 through 2026 has records. Status metadata for all returned turns is `Gecorrigeerd` or `Gerectificeerd`.
+
+A separate listing check found **919 plenary meetings**, 16 more than the distinct parsed session count. This may include meetings without a final report or other selection/format losses; it is **unreconciled**, not a confirmed 16 missing transcripts. Reconcile each meeting ID with final-report metadata and the XML session before declaring full coverage. Inspect a reproducible random sample against official XML, check speaker/role and text boundaries, and verify whether any API record is exempt from the portal's stated CC0 terms.
+
+The 40-word-eligible subset has **193,384 records / 44,216,057 words**, or **533,600 started 100-word units / $26,680.00** at the current list rate. The [tracked manifest](../data/manifests/netherlands_current_manifest.json) has the local file hash. All text is Git-ignored. No Pangram call was made.

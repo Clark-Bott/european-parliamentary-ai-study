@@ -1,0 +1,13 @@
+{
+  "country": "Netherlands",
+  "output": "data/controls/netherlands_historical_sample.jsonl",
+  "sha256": "8d6f1af24f0009c2841180e304dee6381222bc230e3211d911a057a077bd2ede",
+  "records": 658,
+  "requested_records": 1000,
+  "words": 216665,
+  "seed": 2026,
+  "year_counts": {"2018": 136, "2019": 148, "2020": 141, "2021": 233},
+  "missing_party_records": 149,
+  "list_price_usd_at_0_05_per_unit": 123.70,
+  "note": "Strict two-records-per-speaker cap yielded fewer than the requested 1000. Not authorship ground truth; no Pangram inference performed; text Git-ignored."
+}
