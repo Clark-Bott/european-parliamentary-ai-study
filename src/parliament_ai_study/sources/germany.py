@@ -5,6 +5,7 @@ from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
+from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 from ..io import write_jsonl
@@ -14,6 +15,17 @@ from .download import download_file, fetch_bytes
 BASE = "https://www.bundestag.de"
 # IDs are the XML-only document lists on the Bundestag's Open Data page.
 LIST_IDS = {19: "543410-543410", 20: "866354-866354", 21: "1058442-1058442"}
+LIST_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer": f"{BASE}/services/opendata",
+}
+
+
+def _fetch_list_page(url: str) -> bytes:
+    """Use the open-data page's normal referer and HTML request contract."""
+    request = Request(url, headers=LIST_HEADERS, method="GET")
+    with urlopen(request, timeout=60) as response:
+        return response.read()
 
 
 class _Links(HTMLParser):
@@ -34,8 +46,9 @@ def list_protocols(term: int) -> list[str]:
         raise ValueError(f"unsupported Bundestag electoral term: {term}")
     found: dict[str, str] = {}
     for offset in range(0, 10000, 10):
-        url = f"{BASE}/ajax/filterlist/de/services/opendata/{LIST_IDS[term]}?noFilterSet=true&offset={offset}"
-        page, _ = fetch_bytes(url)
+        url = (f"{BASE}/ajax/filterlist/de/services/opendata/{LIST_IDS[term]}"
+               f"?noFilterSet=true&limit=10&offset={offset}")
+        page = _fetch_list_page(url)
         parser = _Links()
         parser.feed(page.decode("utf-8"))
         if not parser.links:

@@ -6,7 +6,7 @@ from http.client import IncompleteRead
 
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
-from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links
+from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links, list_protocols
 from parliament_ai_study.sources.italy import build_camera_corpus, parse_camera_html, parse_camera_xml
 from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml, iter_tweede_kamer_speeches, _odata_pages
 from unittest.mock import patch
@@ -193,6 +193,28 @@ class ManifestTests(unittest.TestCase):
 
 
 class BundestagParserTests(unittest.TestCase):
+    def test_protocol_list_uses_official_limit_and_html_headers(self):
+        requests = []
+        def fake_page(url):
+            requests.append(url)
+            offset = int(url.rsplit("offset=", 1)[1])
+            links = (f'<a href="/resource/blob/1/{19000 + offset + index}.xml">x</a>'
+                     for index in range(10 if offset == 0 else 1))
+            return ("".join(links)).encode()
+        with patch("parliament_ai_study.sources.germany._fetch_list_page", side_effect=fake_page):
+            links = list_protocols(19)
+        self.assertEqual(len(links), 11)
+        self.assertIn("limit=10&offset=0", requests[0])
+        self.assertIn("limit=10&offset=10", requests[1])
+
+    def test_list_request_uses_official_referer_header(self):
+        with patch("parliament_ai_study.sources.germany.urlopen") as opener:
+            opener.return_value.__enter__.return_value.read.return_value = b""
+            list_protocols(19)
+        request = opener.call_args.args[0]
+        self.assertEqual(request.get_header("Referer"), "https://www.bundestag.de/services/opendata")
+        self.assertIn("text/html", request.get_header("Accept"))
+
     def test_minister_role_comes_from_nested_official_role_label(self):
         xml = '''<dbtplenarprotokoll wahlperiode="21" sitzung-nr="95" sitzung-datum="23.09.2026">
           <rede id="ID1"><p klasse="redner"><redner id="1"><name><vorname>Boris</vorname>
