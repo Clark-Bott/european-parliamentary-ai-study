@@ -88,7 +88,15 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
     report["country_sha256"] = country_hashes
     report["source_gap_reports"] = {country: str(path) for country, path in gap_paths.items()}
     report["unresolved_source_gaps"] = unresolved_source_gaps
-    report["paid_inference_ready"] = not unresolved_source_gaps
+    report["source_gap_free"] = not unresolved_source_gaps
+    approval_path = manifest.parent / "paid_processing_approval.json"
+    blockers = []
+    if unresolved_source_gaps:
+        blockers.append("unresolved official source gaps")
+    if not approval_path.is_file():
+        blockers.append("paid processing approval is absent")
+    report["paid_inference_blockers"] = blockers
+    report["paid_inference_ready"] = not blockers
     manifest.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return report
 

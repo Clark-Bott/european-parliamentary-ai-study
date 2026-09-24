@@ -381,7 +381,9 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(result["sample_records"], 6)
             self.assertEqual(set(result["country_sha256"]), {
                 "Germany", "France", "Netherlands", "Italy", "Spain", "Poland"})
-            self.assertTrue(result["paid_inference_ready"])
+            self.assertTrue(result["source_gap_free"])
+            self.assertFalse(result["paid_inference_ready"])
+            self.assertIn("paid processing approval is absent", result["paid_inference_blockers"])
             self.assertTrue((root.parent / "manifests/combined_corpus.json").is_file())
             gap = root.parent / "manifests/spain_unavailable_journals.json"
             write_jsonl(gap, [{"term": 14, "number": 59}])
