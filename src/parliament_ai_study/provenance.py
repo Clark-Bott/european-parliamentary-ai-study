@@ -149,6 +149,13 @@ def reconcile_source_manifest(raw_dir: str | Path = "data/raw",
         entry = file_manifest_entry(
             path, url, content_type=_content_type(path),
             retrieved_at_utc=datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat())
+        previous = existing.get(local_path)
+        if (previous and previous.get("sha256") == entry.get("sha256")
+                and previous.get("source_url") == entry.get("source_url")
+                and previous.get("retrieved_at_utc")):
+            entry["retrieved_at_utc"] = previous["retrieved_at_utc"]
+        else:
+            entry["retrieved_at_utc_basis"] = "file_mtime"
         if not url:
             entry["provenance_status"] = "unresolved_source_url"
         current[local_path] = entry
