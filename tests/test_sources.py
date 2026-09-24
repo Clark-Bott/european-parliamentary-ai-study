@@ -11,7 +11,9 @@ from parliament_ai_study.sources.germany import (CPP_BT_MEMBER, build_bundestag_
                                                iter_cpp_bt_speeches, list_protocols,
                                                parse_bundestag_xml, _Links)
 from parliament_ai_study.sources.italy import build_camera_corpus, parse_camera_html, parse_camera_xml
-from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml, iter_tweede_kamer_speeches, _odata_pages
+from parliament_ai_study.sources.netherlands import (audit_tweede_kamer_coverage,
+    iter_tweede_kamer_speeches, parse_tweede_kamer_xml, _odata_pages,
+    _select_final_report)
 from unittest.mock import patch
 from parliament_ai_study.sources.sejm import parse_sejm_statement
 from parliament_ai_study.sources.spain import parse_congreso_html, journal_url
@@ -345,6 +347,34 @@ class ItalyParserTests(unittest.TestCase):
 
 
 class NetherlandsParserTests(unittest.TestCase):
+    def test_only_corrected_final_report_is_selectable(self):
+        versions = [
+            {"Id": "uncorrected", "Status": "Ongecorrigeerd", "GewijzigdOp": "2026-09-24"},
+            {"Id": "corrected", "Status": "Gecorrigeerd", "GewijzigdOp": "2026-09-23"},
+        ]
+        self.assertEqual(_select_final_report(versions)["Id"], "corrected")
+        self.assertIsNone(_select_final_report([versions[0]]))
+
+    def test_coverage_audit_distinguishes_finals_from_provisional_reports(self):
+        meetings = [
+            {"Id": "m1", "Datum": "2024-01-01T00:00:00+01:00", "VergaderingNummer": 1,
+             "Titel": "One", "Verslag": [
+                 {"Id": "r1", "Soort": "Eindpublicatie", "Status": "Gecorrigeerd",
+                  "GewijzigdOp": "2024-01-02", "Verwijderd": False}]},
+            {"Id": "m2", "Datum": "2026-09-24T00:00:00+02:00", "VergaderingNummer": 2,
+             "Titel": "Two", "Verslag": [
+                 {"Id": "r2", "Soort": "Tussenpublicatie", "Status": "Ongecorrigeerd",
+                  "GewijzigdOp": "2026-09-24", "Verwijderd": False}]},
+            {"Id": "m3", "Datum": "2020-12-08T00:00:00+01:00", "VergaderingNummer": 3,
+             "Titel": "Duplicate", "Verslag": []},
+        ]
+        with patch("parliament_ai_study.sources.netherlands._odata_pages", return_value=meetings):
+            audit = audit_tweede_kamer_coverage()
+        self.assertEqual(audit["listed_meetings"], 3)
+        self.assertEqual(audit["selected_final_reports"], 1)
+        self.assertEqual(audit["provisional_only_meetings"], 1)
+        self.assertEqual(audit["meetings_without_any_report"], 1)
+
     def test_odata_manual_skip_when_server_omits_nextlink(self):
         import json
         pages = []

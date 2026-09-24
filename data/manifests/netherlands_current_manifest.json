@@ -7,7 +7,12 @@
   "records": 344220,
   "words": 46237076,
   "distinct_parsed_sessions": 903,
-  "previous_listing_meetings": 919,
+  "listed_plenary_meetings": 919,
+  "selected_final_reports": 903,
+  "selected_status_counts": {"Gecorrigeerd": 884, "Gerectificeerd": 19},
+  "meetings_without_selected_final": 16,
+  "provisional_only_meetings": 15,
+  "erroneous_or_duplicate_meeting_rows": 1,
   "eligible_min_words": 40,
   "eligible_records": 193384,
   "eligible_words": 44216057,
@@ -15,5 +20,5 @@
   "list_price_usd_at_0_05_per_unit": 26680.00,
   "duplicate_speech_ids": 0,
   "duplicate_text_hashes_all_lengths": 39754,
-  "note": "The 919-meeting listing and 903 parsed reports have not been reconciled. No completeness, source-boundary, or reuse-rights sign-off; corpus is Git-ignored."
+  "note": "The 903 local report IDs exactly match all 903 active corrected/rectified final reports. Of 16 other OData meeting rows, one is a verified erroneous/duplicate 2020 row and 15 are post-cutoff provisional-only meetings. No historical transcript is missing; source-boundary and reuse-rights sign-off remain. Corpus is Git-ignored."
 }

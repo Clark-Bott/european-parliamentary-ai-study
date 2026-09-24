@@ -112,16 +112,20 @@ def _odata_pages(url: str) -> Iterator[dict[str, Any]]:
         next_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), ""))
 
 
+def _select_final_report(versions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Select the latest corrected/rectified final, never a provisional report."""
+    corrected = [row for row in versions
+                 if row.get("Status") in ("Gecorrigeerd", "Gerectificeerd")]
+    if not corrected:
+        return None
+    return max(corrected, key=lambda row: str(row.get("GewijzigdOp", "")))
+
+
 def _corrected_final_report(meeting_id: str) -> dict[str, Any] | None:
     expression = (f"Vergadering_Id eq {meeting_id} and Verwijderd eq false and "
                   "Soort eq 'Eindpublicatie'")
     url = ODATA + "/Verslag?" + urlencode({"$filter": expression, "$orderby": "GewijzigdOp desc", "$top": "20"})
-    versions = list(_odata_pages(url))
-    if not versions:
-        return None
-    versions.sort(key=lambda row: (row.get("Status") in ("Gecorrigeerd", "Gerectificeerd"),
-                                   row.get("GewijzigdOp", "")), reverse=True)
-    return versions[0]
+    return _select_final_report(list(_odata_pages(url)))
 
 
 def _download_report(report_id: str, raw_dir: str | Path,
@@ -133,14 +137,67 @@ def _download_report(report_id: str, raw_dir: str | Path,
     return path, url
 
 
+def _meeting_filter(start_year: int, end_year: int) -> str:
+    return (
+        "Verwijderd eq false and Soort eq 'Plenair' and Kamer eq 'Tweede Kamer' and "
+        f"Datum ge {start_year - 1}-12-31T00:00:00Z and Datum lt {end_year + 1}-01-02T00:00:00Z"
+    )
+
+
+def audit_tweede_kamer_coverage(*, start_year: int = 2018,
+                                end_year: int = 2026) -> dict[str, Any]:
+    """Reconcile listed meetings with selected corrected final reports."""
+    meeting_url = ODATA + "/Vergadering?" + urlencode({
+        "$filter": _meeting_filter(start_year, end_year),
+        "$orderby": "Datum asc,Id asc", "$top": 250,
+        "$expand": "Verslag($filter=Verwijderd eq false;$orderby=GewijzigdOp desc)",
+    })
+    meetings = list(_odata_pages(meeting_url))
+    selected = []
+    missing = []
+    for meeting in meetings:
+        reports = [row for row in meeting.get("Verslag", [])
+                   if row.get("Soort") == "Eindpublicatie" and not row.get("Verwijderd")]
+        final = _select_final_report(reports)
+        if final is not None:
+            selected.append({
+                "meeting_id": str(meeting["Id"]), "date": str(meeting["Datum"])[:10],
+                "meeting_number": meeting.get("VergaderingNummer"),
+                "report_id": str(final["Id"]), "status": str(final.get("Status", "")),
+            })
+            continue
+        provisional = [row for row in meeting.get("Verslag", [])
+                       if row.get("Soort") == "Tussenpublicatie" and not row.get("Verwijderd")]
+        latest = max(provisional, key=lambda row: str(row.get("GewijzigdOp", "")), default=None)
+        missing.append({
+            "meeting_id": str(meeting["Id"]), "date": str(meeting["Datum"])[:10],
+            "title": str(meeting.get("Titel", "")),
+            "meeting_number": meeting.get("VergaderingNummer"),
+            "all_active_reports": len(meeting.get("Verslag", [])),
+            "provisional_reports": len(provisional),
+            "latest_provisional_report_id": str(latest["Id"]) if latest else None,
+            "latest_provisional_at": str(latest.get("GewijzigdOp", "")) if latest else None,
+        })
+    statuses = {status: sum(row["status"] == status for row in selected)
+                for status in ("Gecorrigeerd", "Gerectificeerd")}
+    return {
+        "retrieval_date": datetime.now().date().isoformat(),
+        "start_year": start_year, "end_year": end_year,
+        "listed_meetings": len(meetings), "selected_final_reports": len(selected),
+        "selected_status_counts": statuses, "meetings_without_selected_final": len(missing),
+        "provisional_only_meetings": sum(row["provisional_reports"] > 0 for row in missing),
+        "meetings_without_any_report": sum(row["all_active_reports"] == 0 for row in missing),
+        "selected_reports": sorted(selected, key=lambda row: (row["date"], row["meeting_id"])),
+        "meetings_without_selected_final_details": sorted(
+            missing, key=lambda row: (row["date"], row["meeting_id"])),
+    }
+
+
 def iter_tweede_kamer_speeches(*, start_year: int = 2018, end_year: int = 2026,
                                raw_dir: str | Path = "data/raw",
                                manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> Iterator[Speech]:
     """Iterate plenary turns with a corrected final report when available."""
-    meeting_filter = (
-        "Verwijderd eq false and Soort eq 'Plenair' and Kamer eq 'Tweede Kamer' and "
-        f"Datum ge {start_year - 1}-12-31T00:00:00Z and Datum lt {end_year + 1}-01-02T00:00:00Z"
-    )
+    meeting_filter = _meeting_filter(start_year, end_year)
     # The server rejects $top > 250. OData dates carry a +01:00/+02:00
     # offset, so use a padded range and filter parsed local dates below.
     meeting_url = ODATA + "/Vergadering?" + urlencode({"$filter": meeting_filter,
@@ -174,4 +231,14 @@ def build_tweede_kamer_corpus(output_path: str | Path, *, start_year: int = 2018
             yield speech.to_dict()
 
     write_jsonl(output_path, serialized())
-    return {"records": records, "words": words}
+    coverage = audit_tweede_kamer_coverage(start_year=start_year, end_year=end_year)
+    coverage_path = Path(manifest_path).parent / "netherlands_coverage_audit.json"
+    coverage_path.parent.mkdir(parents=True, exist_ok=True)
+    coverage_path.write_text(json.dumps(coverage, ensure_ascii=False, indent=2) + "\n",
+                             encoding="utf-8")
+    return {
+        "records": records, "words": words,
+        "listed_meetings": coverage["listed_meetings"],
+        "selected_final_reports": coverage["selected_final_reports"],
+        "meetings_without_selected_final": coverage["meetings_without_selected_final"],
+    }
