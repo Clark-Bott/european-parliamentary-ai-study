@@ -2,6 +2,10 @@
 
 Last acquisition and parse: 2026-09-24. This is an execution log for the French adapter, not a six-country corpus QA sign-off.
 
+**Rebuild note (2026-09-24):** An updated full rebuild of the same three archived ZIP checksums emitted 1,243,606 records / 75,392,623 words (393,565 records / 66,401,901 words at 40 words or more). This differs from the earlier four-output run tabulated below by 218 records and 28,133 words, entirely within the previously reported legislature-16 total. The cause remains under investigation; treat the table below as a historical run, **not** the latest corpus. The current French Pangram 4 per-item list-price estimate is 847,941 rounded 100-word units × $0.05 = **$42,397.05** before cache hits or discounts.
+
+A new disk-backed full-file audit (`python -m parliament_ai_study.qa data/processed/france_speeches.jsonl`) passed for the rebuild: **0 duplicate IDs, 0 empty/mismatched text records, 0 missing provenance fields, 0 invalid dates, and coverage in each year 2018–2026**. It found **389,687 repeated normalized text hashes** across all records, largely short formulaic turns. A separate exact-text check of the 393,565 length-eligible records found **175 repeats** (360 rounded units / $18 potential cache savings); leading repeated examples are chair announcements (“La parole est à…”, “L’ordre du jour appelle…”). These data indicate procedural contamination still requires manual review, not that the words are AI-written. The audit is programmatically reproducible; no country-wide random manual source-boundary review has been completed.
+
 ## Source acquisition
 
 Three official Assemblée nationale Syceron XML archives for legislatures 15, 16, and 17 were downloaded from the parliamentary open-data portal. The portal links its Open Licence; review the exact terms and attribution obligations before redistribution.[6][7][8]
@@ -26,7 +30,7 @@ The French adapter uses official `<paragraphe>` elements with an `<orateurs>` sp
 | `france_leg17_2024_2026.jsonl` | 292,418 | 16,467,591 | 2024 | 2026 | `6af4119d09e0084b87a3df48c0ea74bd7a2043d5e89e2f94ed211d1dab09d3c0` |
 | **Total (before eligibility filtering)** | **1,243,388** | **75,364,490** | **2018-01-16** | **2026-07-21** | — |
 
-Counts intentionally include short interruptions and procedural turns; do not interpret them as eligible “speeches” without the planned role/text audit. The 40-word rule leaves 393,480 records and 66,375,086 words eligible by length, before other exclusions. At the public Pangram 4 rate of $0.05 per 100 words, that France-only subset has a preliminary list-price estimate of $33,187.54; account terms, rounding, bulk discounts, and the price at execution may differ.[3] These are France-only transcript counts, not a cross-country comparison or detector result.
+Counts intentionally include short interruptions and procedural turns; do not interpret them as eligible “speeches” without the planned role/text audit. In the **earlier** run the 40-word rule left 393,480 records / 66,375,086 words. Its $33,187.54 estimate did **not** round each speech separately and therefore understated the projected list price. Use the current estimate in the rebuild note above. These are France-only transcript counts, not a cross-country comparison or detector result.
 
 ## Integrity checks executed
 
@@ -39,7 +43,7 @@ A streaming check across all four normalized outputs found:
 - 849,908 interventions were shorter than 40 words and will not be sent to Pangram under the default run threshold.
 - One record exceeds 10,000 words: `CRSJOCGR5L15S2018E1N001:1360145`, dated 2018-07-09, attributed to President Emmanuel Macron, 10,181 words. It has not been declared erroneous or excluded; verify against the official record before inference.
 
-Exact duplicate-text hashes, country/year anomaly thresholds, party metadata completeness, and representative random samples have not yet been audited.
+The earlier run had not audited exact duplicate-text hashes; the new full-file audit above did. Country/year anomaly thresholds, party metadata completeness, and representative random manual source-boundary samples have not yet been audited.
 
 ## Manual source comparison
 

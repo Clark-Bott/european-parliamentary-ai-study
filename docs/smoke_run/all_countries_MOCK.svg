@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="440" viewBox="0 0 920 440">
+<rect width="100%" height="100%" fill="white"/>
+<text x="70" y="25" font-family="sans-serif" font-size="18" font-weight="bold">Pangram-classified AI-generated word share by month (MOCKED)</text>
+<line x1="70" y1="45.0" x2="895" y2="45.0" stroke="#ddd"/>
+<text x="60" y="49.0" text-anchor="end" font-size="11" font-family="sans-serif">17.2%</text>
+<line x1="70" y1="110.0" x2="895" y2="110.0" stroke="#ddd"/>
+<text x="60" y="114.0" text-anchor="end" font-size="11" font-family="sans-serif">13.8%</text>
+<line x1="70" y1="175.0" x2="895" y2="175.0" stroke="#ddd"/>
+<text x="60" y="179.0" text-anchor="end" font-size="11" font-family="sans-serif">10.3%</text>
+<line x1="70" y1="240.0" x2="895" y2="240.0" stroke="#ddd"/>
+<text x="60" y="244.0" text-anchor="end" font-size="11" font-family="sans-serif">6.9%</text>
+<line x1="70" y1="305.0" x2="895" y2="305.0" stroke="#ddd"/>
+<text x="60" y="309.0" text-anchor="end" font-size="11" font-family="sans-serif">3.4%</text>
+<line x1="70" y1="370.0" x2="895" y2="370.0" stroke="#ddd"/>
+<text x="60" y="374.0" text-anchor="end" font-size="11" font-family="sans-serif">0.0%</text>
+<text x="70.0" y="400" text-anchor="middle" font-size="10" font-family="sans-serif">2019-02</text>
+<text x="235.0" y="400" text-anchor="middle" font-size="10" font-family="sans-serif">2019-06</text>
+<text x="400.0" y="400" text-anchor="middle" font-size="10" font-family="sans-serif">2019-10</text>
+<text x="565.0" y="400" text-anchor="middle" font-size="10" font-family="sans-serif">2024-02</text>
+<text x="730.0" y="400" text-anchor="middle" font-size="10" font-family="sans-serif">2024-06</text>
+<text x="895.0" y="400" text-anchor="middle" font-size="10" font-family="sans-serif">2024-10</text>
+<polyline points="70.0,370.0 235.0,332.3 400.0,143.9 565.0,219.3 730.0,87.4 895.0,143.9" fill="none" stroke="#3569a8" stroke-width="2"/>
+<circle cx="70.0" cy="370.0" r="3" fill="#3569a8"/>
+<circle cx="235.0" cy="332.3" r="3" fill="#3569a8"/>
+<circle cx="400.0" cy="143.9" r="3" fill="#3569a8"/>
+<circle cx="565.0" cy="219.3" r="3" fill="#3569a8"/>
+<circle cx="730.0" cy="87.4" r="3" fill="#3569a8"/>
+<circle cx="895.0" cy="143.9" r="3" fill="#3569a8"/>
+<line x1="70" y1="425" x2="88" y2="425" stroke="#3569a8" stroke-width="3"/>
+<text x="94" y="429" font-size="11" font-family="sans-serif">France</text>
+<polyline points="70.0,162.8 235.0,275.8 400.0,106.2 565.0,125.1 730.0,181.6 895.0,370.0" fill="none" stroke="#d45e36" stroke-width="2"/>
+<circle cx="70.0" cy="162.8" r="3" fill="#d45e36"/>
+<circle cx="235.0" cy="275.8" r="3" fill="#d45e36"/>
+<circle cx="400.0" cy="106.2" r="3" fill="#d45e36"/>
+<circle cx="565.0" cy="125.1" r="3" fill="#d45e36"/>
+<circle cx="730.0" cy="181.6" r="3" fill="#d45e36"/>
+<circle cx="895.0" cy="370.0" r="3" fill="#d45e36"/>
+<line x1="205" y1="425" x2="223" y2="425" stroke="#d45e36" stroke-width="3"/>
+<text x="229" y="429" font-size="11" font-family="sans-serif">Germany</text>
+<polyline points="70.0,200.4 235.0,275.8 400.0,181.6 565.0,275.8 730.0,219.3 895.0,370.0" fill="none" stroke="#32876b" stroke-width="2"/>
+<circle cx="70.0" cy="200.4" r="3" fill="#32876b"/>
+<circle cx="235.0" cy="275.8" r="3" fill="#32876b"/>
+<circle cx="400.0" cy="181.6" r="3" fill="#32876b"/>
+<circle cx="565.0" cy="275.8" r="3" fill="#32876b"/>
+<circle cx="730.0" cy="219.3" r="3" fill="#32876b"/>
+<circle cx="895.0" cy="370.0" r="3" fill="#32876b"/>
+<line x1="340" y1="425" x2="358" y2="425" stroke="#32876b" stroke-width="3"/>
+<text x="364" y="429" font-size="11" font-family="sans-serif">Italy</text>
+<polyline points="70.0,313.5 235.0,219.3 400.0,257.0 565.0,162.8 730.0,200.4 895.0,219.3" fill="none" stroke="#8b62a9" stroke-width="2"/>
+<circle cx="70.0" cy="313.5" r="3" fill="#8b62a9"/>
+<circle cx="235.0" cy="219.3" r="3" fill="#8b62a9"/>
+<circle cx="400.0" cy="257.0" r="3" fill="#8b62a9"/>
+<circle cx="565.0" cy="162.8" r="3" fill="#8b62a9"/>
+<circle cx="730.0" cy="200.4" r="3" fill="#8b62a9"/>
+<circle cx="895.0" cy="219.3" r="3" fill="#8b62a9"/>
+<line x1="475" y1="425" x2="493" y2="425" stroke="#8b62a9" stroke-width="3"/>
+<text x="499" y="429" font-size="11" font-family="sans-serif">Netherlands</text>
+<polyline points="70.0,294.6 235.0,257.0 400.0,370.0 565.0,332.3 730.0,257.0 895.0,313.5" fill="none" stroke="#d09b27" stroke-width="2"/>
+<circle cx="70.0" cy="294.6" r="3" fill="#d09b27"/>
+<circle cx="235.0" cy="257.0" r="3" fill="#d09b27"/>
+<circle cx="400.0" cy="370.0" r="3" fill="#d09b27"/>
+<circle cx="565.0" cy="332.3" r="3" fill="#d09b27"/>
+<circle cx="730.0" cy="257.0" r="3" fill="#d09b27"/>
+<circle cx="895.0" cy="313.5" r="3" fill="#d09b27"/>
+<line x1="610" y1="425" x2="628" y2="425" stroke="#d09b27" stroke-width="3"/>
+<text x="634" y="429" font-size="11" font-family="sans-serif">Poland</text>
+<polyline points="70.0,313.5 235.0,313.5 400.0,332.3 565.0,106.2 730.0,162.8 895.0,351.2" fill="none" stroke="#4b8e9d" stroke-width="2"/>
+<circle cx="70.0" cy="313.5" r="3" fill="#4b8e9d"/>
+<circle cx="235.0" cy="313.5" r="3" fill="#4b8e9d"/>
+<circle cx="400.0" cy="332.3" r="3" fill="#4b8e9d"/>
+<circle cx="565.0" cy="106.2" r="3" fill="#4b8e9d"/>
+<circle cx="730.0" cy="162.8" r="3" fill="#4b8e9d"/>
+<circle cx="895.0" cy="351.2" r="3" fill="#4b8e9d"/>
+<line x1="745" y1="425" x2="763" y2="425" stroke="#4b8e9d" stroke-width="3"/>
+<text x="769" y="429" font-size="11" font-family="sans-serif">Spain</text>
+</svg>

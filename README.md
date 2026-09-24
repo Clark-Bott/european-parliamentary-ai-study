@@ -9,43 +9,44 @@ The project is motivated by The Economist's September 2026 article, “AI-writte
 ## Current status — be precise
 
 - RESEARCH RECONNAISSANCE: partial; primary Economist method disclosure is still inaccessible
-- FRANCE ARCHIVE COLLECTION: downloaded the official 15th, 16th, and 17th-legislature Syceron XML archives
-- FRANCE PARSING/NORMALIZATION: 1,243,388 intervention records and 75,364,490 words processed for 2018–2026 material through 2026-07-21; raw/processed archives remain local and Git-ignored
+- FRANCE ARCHIVE COLLECTION: official 15th–17th legislature Syceron ZIPs were downloaded and checksum-verified locally; they are not in Git and must be downloaded in a fresh clone
+- FRANCE PARSING/NORMALIZATION: current local rebuild emitted 1,243,606 intervention records / 75,392,623 words through 2026-07-21; disk-backed full-file audit passed, but found 389,687 repeated text hashes, mostly formulaic short turns. Random source-boundary QA remains outstanding.
 - FRANCE QA: 0 duplicate speech IDs, 0 empty records, and 0 missing provenance fields in the streamed check; one official webpage sample was manually compared; full manual sampling, text-boundary audit, duplicate-text review, and review of an over-10,000-word record remain outstanding
 - HISTORICAL CONTROL: deterministic seeded sampler implemented; a local French 2018–2021 sample of 1,000 records / 227,069 words was generated; party metadata is unknown for 775 records, and no other language control sample exists yet ([method and QA](docs/historical_controls.md))
 - POLAND: official API enumeration and per-statement HTML downloader/parser implemented; one 2023-11-13 sitting sample yielded 43 interventions and 19,291 words; the full historical corpus and country QA have not been run
 - NETHERLANDS: OData final-report adapter/parser implemented; one corrected 2025-03-19 plenary report yielded 308 interventions and 55,561 words; full historical acquisition and country QA have not been run ([sample QA](docs/netherlands_sample_qa.md))
-- ITALY: explicit-sitting HTML downloader/parser implemented; one 2026-09-18 sitting yielded 47 interventions and 1,808 words; full session index and historical corpus are not ready ([sample QA](docs/italy_sample_qa.md))
-- GERMANY, SPAIN: no complete acquisition/parser adapter yet
+- ITALY: official XML adapter across terms 17–19; corrected 2026-09-18 sitting yielded 47 interventions / 15,203 words, not the incomplete HTML parser's 1,808 words ([sample QA](docs/italy_sample_qa.md))
+- GERMANY: official XML pagination and parser, one 2026-09-23 sample with 190 turns / 43,805 words ([sample QA](docs/germany_sample_qa.md))
+- SPAIN: official Diario full-text pagination and speaker-boundary parser, one 2026-09-15 sample with 134 turns / 53,459 words; party and person ID enrichment remain absent ([sample QA](docs/spain_sample_qa.md))
+- SIX-COUNTRY BUILD: acquisition adapters and a combined-corpus builder exist; the full 2018–2026 acquisition and random manual QA have **not** been completed
 - PANGRAM CLIENT: async task client, request fingerprint cache, resume state, opt-in paid-run guard, and mocked tests implemented; no live request made
-- COST CONTROL: configurable estimator implemented; default Pangram 4 price is an estimate from the current public developer page, not an account quote
+- COST CONTROL: per-item rounded estimator implemented; current local France-only length-eligible estimate: 393,565 records / 66,401,901 words / 847,941 started 100-word units / **$42,397.05** list price at $0.05 per unit. This is not an account quote.
 - ANALYSIS: aggregation, tables, SVG figures, and report generation implemented; exercised on synthetic smoke data only
 - FULL INFERENCE: NOT RUN; no paid API call was made
 
-The API key is not the only blocker: five country corpora, cross-country acquisition and parsing, complete validation, and manual review remain unfinished. Do not cite mock outputs as research findings. Detailed French counts, coverage, and known anomalies are in [docs/corpus_qa.md](docs/corpus_qa.md).
+The API key is **not** the only blocker: five country corpora, full six-country coverage validation, licensing/third-party processing review, and random manual boundary audits remain unfinished. A guard prevents paid submission when any country/year is missing; it cannot substitute for source QA. Do not cite mock outputs as research findings. Detailed earlier French counts and anomalies are in [docs/corpus_qa.md](docs/corpus_qa.md).
 
 ## Run the verified smoke workflow
 
-Python 3.11 or later; no third-party runtime packages are required.
+Python 3.11 or later; no third-party runtime packages are required. The launcher uses `.venv/bin/python`, or `uv` with Python 3.12 when `.venv` is absent.
 
 ```bash
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install -e .
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -e .
 ./run_experiment.sh --dry-run
 ```
 
-The dry run is deterministic and never contacts Pangram. With no corpus present, it creates an explicitly synthetic six-country test fixture and exercises QA, cost estimation, aggregation, CSV tables, SVG figures, machine-readable mock results, and a report under `results/`. The generated test corpus is not parliamentary data and must not be treated as detector evidence.
+The default dry run is deterministic and never contacts Pangram. With no combined corpus present, it creates an explicitly synthetic six-country test fixture and exercises QA, cost estimation, aggregation, CSV tables, SVG figures, machine-readable mock results, and a report under `results/`. **This is a software smoke test, not an end-to-end run on six real corpora.** To acquire every official corpus before a real-corpus dry run, use `./run_experiment.sh --build-corpus --dry-run`. This can download many files and may take a long time. To acquire without analysis, use `uv run --python 3.12 python -m parliament_ai_study.sources.build` after installation. Individual adapters: `uv run --python 3.12 python -m parliament_ai_study.sources.cli Germany` (also France, Netherlands, Italy, Spain, Poland).
 
 Run tests with:
 
 ```bash
-PYTHONPATH=src python -m unittest discover -s tests -v
+uv run --python 3.12 python -m unittest discover -s tests -v
 ```
 
 ## Cost estimate and paid-run guard
 
-The Pangram 4 public developer page currently advertises $0.05 per 100 words (equivalent to $0.50 per 1,000 words); Pangram 3 is advertised at a different rate. The code's default rate is a planning assumption for Pangram 4 and is configurable. Confirm the current plan, model access, and billing terms with Pangram before a paid run. The public page also advertises bulk pricing; this repository does not assume eligibility for it.[3]
+The Pangram 4 developer page advertises $0.05 per **started 100-word block per item**, with a minimum one block per eligible speech. Two 101-word speeches cost four blocks, not 2.02 blocks. The default $0.50 / 1,000 words is configurable. Confirm current plan, model access, and billing terms before a paid run. The public page advertises bulk discounts; this task-based client does not assume them.[3]
 
 After a normalized JSONL corpus exists, estimate cost without inference:
 
@@ -60,15 +61,15 @@ To configure access, copy `.env.example` to `.env` and set `PANGRAM_API_KEY`; `.
 ./run_experiment.sh --corpus data/processed/speeches.jsonl --confirm-paid-run
 ```
 
-This command currently requires a corpus prepared by acquisition code; the six-country automatic corpus build is not complete. Never use the paid flag until corpus QA and the estimate are reviewed. Completed responses are cached under a text-plus-configuration SHA-256 key. Ambiguous POST outcomes are marked and not automatically resubmitted, to reduce duplicate billing risk.
+If the combined corpus is missing, this command attempts to acquire and normalize all six chambers first. It rejects missing country/year coverage and checks the model selector through Pangram's read-only `/models` endpoint. **Do not use the paid flag until full country QA, third-party processing rights, and the estimate are reviewed.** Completed responses are cached under a text-plus-configuration SHA-256 key. Ambiguous POST outcomes are marked and not automatically resubmitted. An inaccessible source or unresolved format change still requires engineering; the key alone is not sufficient today.
 
 ## Method and data
 
-The observation is intended to be an individually attributed substantive plenary intervention, preserving source-language text. Do not translate before detection. AI-generated and AI-assisted classifications are distinct; the primary word share uses Pangram segment word counts where returned, falling back to the returned text fractions only if segment word counts are absent. Historical texts (2018–2021) are calibration controls, not ground truth. A detector label does not establish that a named member personally used AI; staff may draft speeches. Method choices and uncertainties are recorded in [docs/methodology.md](docs/methodology.md), [docs/data_sources.md](docs/data_sources.md), and [docs/limitations.md](docs/limitations.md).
+The observation is intended to be an individually attributed substantive plenary intervention, preserving source-language text. Do not translate before detection. AI-generated and AI-assisted classifications are distinct; the primary word share uses Pangram segment word proportions where returned, scaled to the source Unicode word denominator to accommodate Pangram normalization. Historical texts (2018–2021) are calibration controls, not ground truth. A detector label does not establish that a named member personally used AI; staff may draft speeches. Method choices and uncertainties are recorded in [docs/methodology.md](docs/methodology.md), [docs/data_sources.md](docs/data_sources.md), and [docs/limitations.md](docs/limitations.md).
 
 ## Output and data policy
 
-Source licenses and terms must be reviewed before redistribution or paid processing. French raw archives and four processed JSONL files exist locally, are excluded from Git, and are inventoried by checksums in `data/manifests/source_manifest.jsonl`; their counts and integrity caveats are in `docs/corpus_qa.md`. France-only corpus statistics are not six-country research results.
+Source licenses and terms must be reviewed before redistribution or paid processing. Raw archives and derived JSONL are excluded from Git. The manifest documents an earlier French collection and current official-source samples; a new clone must reacquire them. France-only historical corpus statistics are not six-country research results.
 
 ## Repository status
 
