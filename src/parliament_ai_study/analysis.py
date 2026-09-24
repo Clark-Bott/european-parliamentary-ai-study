@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable, Mapping
 from datetime import date
 from typing import Any, Iterable
 
@@ -23,9 +24,12 @@ def _fraction(response: dict[str, Any], key: str) -> float:
     return value
 
 
+ResponseSource = Mapping[str, dict[str, Any]] | Callable[[Any], dict[str, Any]]
+
+
 def aggregate_results(
     speeches: Iterable[Any],
-    responses: dict[str, dict[str, Any]],
+    responses: ResponseSource,
     *, period: str = "month", min_words: int = 40,
     exclude_ministers: bool = False, exclude_chairs: bool = False,
 ) -> list[dict[str, Any]]:
@@ -46,9 +50,7 @@ def aggregate_results(
                                or any(term in name for term in ("le président", "la présidente", "presidenta", "presidente de la mesa"))):
             continue
         speech_id = str(get("speech_id", ""))
-        if speech_id not in responses:
-            raise KeyError(f"missing Pangram response for {speech_id}")
-        response = responses[speech_id]
+        response = responses(speech) if callable(responses) else responses[speech_id]
         ai = _fraction(response, "fraction_ai")
         mixed = _fraction(response, "fraction_ai_assisted")
         if ai + mixed > 1.000001:

@@ -1,7 +1,7 @@
 """End-to-end smoke, cost-control, inference, and research-output pipeline."""
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 import csv
 from datetime import datetime, timezone
 import hashlib
@@ -13,10 +13,10 @@ from typing import Any
 
 from .analysis import aggregate_results
 from .cost import estimate_cost
-from .io import read_jsonl, write_jsonl
+from .io import iter_jsonl, write_jsonl
 from .models import Speech
-from .pangram import PangramClient, ResponseCache
-from .qa import COUNTRIES, validate_corpus
+from .pangram import PangramClient, ResponseCache, request_fingerprint
+from .qa import COUNTRIES, audit_corpus_file
 
 
 def _mock_corpus() -> list[dict[str, Any]]:
@@ -54,7 +54,7 @@ def _write_csv(path: Path, records: list[dict[str, Any]]) -> None:
         writer.writerows(records)
 
 
-def _country_summaries(speeches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _country_summaries(speeches: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, dict[str, int]] = {}
     for speech in speeches:
         row = grouped.setdefault(str(speech["country"]), {
@@ -69,18 +69,15 @@ def _country_summaries(speeches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"country": country, **grouped.get(country, empty)} for country in COUNTRIES]
 
 
-def _mock_responses(speeches: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    responses = {}
-    for speech in speeches:
-        digest = hashlib.sha256(str(speech["speech_id"]).encode()).digest()
-        ai = (digest[0] % 16) / 100
-        mixed = (digest[1] % 11) / 100
-        responses[str(speech["speech_id"])] = {
-            "stage": "STAGE_SUCCESS", "version": "MOCK", "fraction_ai": ai,
-            "fraction_ai_assisted": mixed, "fraction_human": 1 - ai - mixed,
-            "prediction_short": "MOCK", "mock": True,
-        }
-    return responses
+def _mock_response(speech: dict[str, Any]) -> dict[str, Any]:
+    digest = hashlib.sha256(str(speech["speech_id"]).encode()).digest()
+    ai = (digest[0] % 16) / 100
+    mixed = (digest[1] % 11) / 100
+    return {
+        "stage": "STAGE_SUCCESS", "version": "MOCK", "fraction_ai": ai,
+        "fraction_ai_assisted": mixed, "fraction_human": 1 - ai - mixed,
+        "prediction_short": "MOCK", "mock": True,
+    }
 
 
 def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str) -> None:
@@ -130,24 +127,26 @@ def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str) -> None:
     path.write_text("\n".join(elements) + "\n", encoding="utf-8")
 
 
-def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str, Any]],
-                   results_dir: Path, *, price: float, model: str, synthetic: bool,
-                   mocked: bool, qa: dict[str, Any]) -> dict[str, Any]:
+def _write_outputs(corpus_path: str | Path,
+                   response_for_speech: Callable[[dict[str, Any]], dict[str, Any]],
+                   results_dir: Path, *, model: str, synthetic: bool, mocked: bool,
+                   qa: dict[str, Any], estimate: dict[str, Any],
+                   response_min_words: int) -> dict[str, Any]:
     tables = results_dir / "tables"
     figures = results_dir / "figures"
     reports = results_dir / "reports"
     processed = results_dir / "processed"
     for directory in (tables, figures, reports, processed):
         directory.mkdir(parents=True, exist_ok=True)
-    sizes = _country_summaries(speeches)
+    sizes = _country_summaries(iter_jsonl(corpus_path))
     _write_csv(tables / "corpus_size.csv", sizes)
-    estimate = estimate_cost(speeches, price_per_1000_words=price)
     _write_csv(tables / "cost_estimate.csv", estimate["rows"] + [{
         "country": "TOTAL", "speeches": estimate["speeches"], "words": estimate["words"],
         "estimated_api_units": estimate["estimated_api_units"], "estimated_cost": estimate["estimated_cost"]}])
     periods = {}
     for granularity in ("month", "quarter", "year"):
-        aggregated = aggregate_results(speeches, responses, period=granularity)
+        aggregated = aggregate_results(iter_jsonl(corpus_path), response_for_speech,
+                                      period=granularity)
         periods[granularity] = aggregated
         filename = {"month": "monthly", "quarter": "quarterly", "year": "annual"}[granularity]
         _write_csv(tables / f"{filename}_results.csv", aggregated)
@@ -173,7 +172,8 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
     sensitivity = []
     for minimum in (40, 100, 250):
         for exclusion in ("none", "ministers", "chairs"):
-            for row in aggregate_results(speeches, responses, period="year", min_words=minimum,
+            for row in aggregate_results(iter_jsonl(corpus_path), response_for_speech,
+                                         period="year", min_words=minimum,
                                          exclude_ministers=exclusion == "ministers",
                                          exclude_chairs=exclusion == "chairs"):
                 baseline_rate = control_rates.get(row["country"])
@@ -190,11 +190,17 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
         country_rows = [row for row in periods["month"] if row["country"] == country]
         _write_svg(figures / f"{safe}.svg", country_rows,
                    title=f"{country}: AI-generated word share" + (" (MOCKED)" if mocked else ""))
-    response_records = [{"speech_id": sid, "response": response} for sid, response in sorted(responses.items())]
-    write_jsonl(processed / ("mock_results.jsonl" if mocked else "speech_results.jsonl"), response_records)
+    def response_records():
+        for speech in iter_jsonl(corpus_path):
+            if int(speech.get("word_count", 0)) < response_min_words:
+                continue
+            yield {"speech_id": str(speech["speech_id"]),
+                   "response": response_for_speech(speech)}
+    write_jsonl(processed / ("mock_results.jsonl" if mocked else "speech_results.jsonl"),
+                response_records())
     (reports / "corpus_qa.json").write_text(json.dumps(qa, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     status = "MOCKED PIPELINE DRY RUN — NOT RESEARCH RESULTS" if mocked else "Pangram inference outputs"
-    report = [f"# Experiment run: {status}", "", f"Model selector: `{model}`", f"Speeches: {len(speeches):,}",
+    report = [f"# Experiment run: {status}", "", f"Model selector: `{model}`", f"Speeches: {qa['records']:,}",
               f"Words: {estimate['words']:,}", f"Estimated cost at configured rate: ${estimate['estimated_cost']:.4f}",
               f"Countries present: {', '.join(qa['countries_present']) or 'none'}", "",
               ("This report contains deterministic mocked detector fractions. "
@@ -203,7 +209,7 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
               "This report summarizes Pangram detector output. Classification is not proof of authorship or personal AI use.", "",
                "Outputs: annual/monthly/quarterly tables, historical baseline and pooled pre/post tables, length/role sensitivity, SVG figures, corpus QA JSON, and machine-readable result JSONL."]
     (reports / ("dry_run_report.md" if mocked else "results_report.md")).write_text("\n".join(report) + "\n", encoding="utf-8")
-    return {"synthetic_smoke_test": synthetic, "mocked": mocked, "speeches": len(speeches), "words": estimate["words"],
+    return {"synthetic_smoke_test": synthetic, "mocked": mocked, "speeches": qa["records"], "words": estimate["words"],
             "estimated_cost": estimate["estimated_cost"], "countries": qa["countries_present"],
             "errors": qa["errors"], "warnings": qa["warnings"], "results_dir": str(results_dir)}
 
@@ -233,6 +239,53 @@ def validate_processing_approval(path: str | Path) -> dict[str, Any]:
     return approval
 
 
+def _qa_for_path(path: str | Path) -> dict[str, Any]:
+    """Adapt the disk-backed audit to the pipeline's QA result shape."""
+    audit = audit_corpus_file(path)
+    errors = list(audit["errors"])
+    if audit["duplicate_speech_id_count"]:
+        errors.append(
+            f"{audit['duplicate_speech_id_count']} duplicate speech IDs; "
+            "the first are " + ", ".join(audit["duplicate_speech_ids"])
+        )
+    country_year_counts = dict(audit["country_year_counts"])
+    years_present = sorted({
+        int(key.rsplit(":", 1)[1]) for key in country_year_counts
+        if ":" in key
+    })
+    countries_present = sorted(audit["countries"])
+    return {
+        "records": audit["records"],
+        "words": audit["words"],
+        "countries_present": countries_present,
+        "countries": countries_present,
+        "years_present": years_present,
+        "missing_countries": [country for country in COUNTRIES if country not in countries_present],
+        "country_year_counts": country_year_counts,
+        "duplicate_speech_ids": audit["duplicate_speech_ids"],
+        "duplicate_speech_id_count": audit["duplicate_speech_id_count"],
+        "duplicate_text_count": audit["duplicate_text_count"],
+        "empty_speeches": audit["empty_speeches"],
+        "implausible_lengths": audit["implausible_lengths"],
+        "errors": errors,
+        "warnings": audit["warnings"],
+        "valid": audit["valid"] and not audit["duplicate_speech_id_count"],
+    }
+
+
+def _cached_response(cache: ResponseCache, model: str,
+                     speech: dict[str, Any]) -> dict[str, Any]:
+    """Read a completed response without submitting another paid request."""
+    configuration = {"model": model, "public_dashboard_link": False}
+    fingerprint = request_fingerprint(str(speech["speech_text"]), configuration)
+    state = cache.state(fingerprint)
+    if state is None or state.get("status") != "complete":
+        raise RuntimeError(
+            f"missing completed cached Pangram response for {speech.get('speech_id')}"
+        )
+    return state["response"]
+
+
 def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  dry_run: bool, price_per_1000_words: float, model: str,
                  confirm_paid_run: bool = False, api_key: str | None = None,
@@ -244,21 +297,20 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
     if corpus is None:
         if not dry_run:
             raise FileNotFoundError("a normalized corpus path is required for paid inference")
-        speeches = _mock_corpus()
+        corpus_path = target / "processed" / "mock_corpus.jsonl"
+        write_jsonl(corpus_path, _mock_corpus())
         synthetic = True
-        write_jsonl(target / "processed" / "mock_corpus.jsonl", speeches)
     else:
-        source = Path(corpus)
-        if not source.is_file():
+        corpus_path = Path(corpus)
+        if not corpus_path.is_file():
             if dry_run:
-                speeches = _mock_corpus()
+                corpus_path = target / "processed" / "mock_corpus.jsonl"
+                write_jsonl(corpus_path, _mock_corpus())
                 synthetic = True
-                write_jsonl(target / "processed" / "mock_corpus.jsonl", speeches)
             else:
-                raise FileNotFoundError(source)
-        else:
-            speeches = read_jsonl(source)
-    qa = validate_corpus(speeches)
+                raise FileNotFoundError(corpus_path)
+
+    qa = _qa_for_path(corpus_path)
     if qa["errors"]:
         raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
     if not dry_run:
@@ -278,10 +330,12 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                 raise ValueError(f"unresolved official source gaps recorded in {gaps_path}; no paid submission")
         validate_processing_approval(
             processing_approval or "data/manifests/paid_processing_approval.json")
-    estimate = estimate_cost(speeches, price_per_1000_words=price_per_1000_words)
-    print(f"Corpus: {len(speeches)} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
+
+    estimate = estimate_cost(iter_jsonl(corpus_path), price_per_1000_words=price_per_1000_words)
+    print(f"Corpus: {qa['records']} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
     if dry_run:
-        responses = _mock_responses(speeches)
+        response_for_speech = _mock_response
+        response_min_words = 0
     else:
         if not confirm_paid_run:
             raise PermissionError("refusing paid inference without --confirm-paid-run")
@@ -292,15 +346,17 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
         if model not in client.available_models():
             raise ValueError(f"Pangram model {model!r} is not available to this API key")
         cache = ResponseCache(target / "raw_pangram")
-        responses = {}
-        eligible_speeches = [speech for speech in speeches if int(speech.get("word_count", 0)) >= 40]
-        total = len(eligible_speeches)
-        for index, speech in enumerate(eligible_speeches, 1):
+        total = estimate["speeches"]
+        eligible_index = 0
+        for speech in iter_jsonl(corpus_path):
+            if int(speech.get("word_count", 0)) < 40:
+                continue
+            eligible_index += 1
             sid = str(speech["speech_id"])
             text = str(speech["speech_text"])
-            print(f"Pangram {index}/{total}: {sid}")
+            print(f"Pangram {eligible_index}/{total}: {sid}")
             try:
-                responses[sid] = client.analyze(text, cache, allow_paid=True)
+                client.analyze(text, cache, allow_paid=True)
             except Exception as exc:
                 log = target / "reports" / "pangram_errors.jsonl"
                 log.parent.mkdir(parents=True, exist_ok=True)
@@ -309,5 +365,9 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                                              "speech_id": sid, "error_type": type(exc).__name__,
                                              "message": str(exc)}, ensure_ascii=False) + "\n")
                 raise
-    return _write_outputs(speeches, responses, target, price=price_per_1000_words,
-                          model=model, synthetic=synthetic, mocked=dry_run, qa=qa)
+        response_for_speech = lambda speech: _cached_response(cache, model, speech)
+        response_min_words = 40
+
+    return _write_outputs(corpus_path, response_for_speech, target, model=model,
+                          synthetic=synthetic, mocked=dry_run, qa=qa, estimate=estimate,
+                          response_min_words=response_min_words)

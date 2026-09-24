@@ -89,13 +89,18 @@ def _valid_date(value: Any) -> bool:
         return False
 
 
-def audit_corpus_file(path: str | Path) -> dict[str, Any]:
+def audit_corpus_file(path: str | Path, *, start_year: int = 2018,
+                      end_year: int = 2026) -> dict[str, Any]:
     """Disk-backed full-file QA without holding millions of speeches in RAM."""
     counts: Counter[str] = Counter()
     years: Counter[str] = Counter()
     duplicate_ids = []
+    duplicate_id_count = 0
     duplicate_text_count = 0
     errors = []
+    warnings = []
+    empty_count = 0
+    implausible_count = 0
     words = 0
     scratch = "/tmp/opencode" if Path("/tmp/opencode").is_dir() else None
     with tempfile.TemporaryDirectory(prefix="parliament-qa-", dir=scratch) as tmp:
@@ -105,23 +110,38 @@ def audit_corpus_file(path: str | Path) -> dict[str, Any]:
         for index, row in enumerate(iter_jsonl(path), 1):
             country, sid = str(row.get("country", "")), str(row.get("speech_id", ""))
             counts[country] += 1
+            if country not in COUNTRIES:
+                errors.append(f"record {index}: unexpected country {country!r}")
             if not sid or not row.get("source_url") or not row.get("source_identifier"):
                 errors.append(f"record {index}: missing ID or provenance")
             else:
                 try:
                     connection.execute("INSERT INTO ids VALUES (?)", (sid,))
                 except sqlite3.IntegrityError:
-                    duplicate_ids.append(sid)
+                    duplicate_id_count += 1
+                    if len(duplicate_ids) < 20:
+                        duplicate_ids.append(sid)
             try:
                 day = date.fromisoformat(str(row.get("date", "")))
                 years[f"{country}:{day.year}"] += 1
+                if not start_year <= day.year <= end_year and len(warnings) < 1000:
+                    warnings.append(f"record {index}: date outside configured study years: {day}")
             except ValueError:
                 errors.append(f"record {index}: invalid date")
             text = str(row.get("speech_text", ""))
-            if not text.strip() or int(row.get("word_count", -1)) != word_count(text):
-                errors.append(f"record {index}: empty text or inconsistent word count")
-            else:
-                words += int(row["word_count"])
+            if not text.strip():
+                empty_count += 1
+                errors.append(f"record {index}: empty text")
+            try:
+                row_words = int(row.get("word_count", -1))
+            except (TypeError, ValueError):
+                row_words = -1
+            if row_words != word_count(text):
+                errors.append(f"record {index}: inconsistent word count")
+            elif row_words >= 0:
+                words += row_words
+                if row_words > 10000:
+                    implausible_count += 1
                 digest = hashlib.sha256(" ".join(text.casefold().split()).encode("utf-8")).hexdigest()
                 try:
                     connection.execute("INSERT INTO texts VALUES (?)", (digest,))
@@ -131,9 +151,10 @@ def audit_corpus_file(path: str | Path) -> dict[str, Any]:
                 raise ValueError("too many corpus integrity errors; first: " + "; ".join(errors[:5]))
         connection.close()
     return {"records": sum(counts.values()), "words": words, "countries": dict(counts),
-            "country_year_counts": dict(sorted(years.items())), "duplicate_speech_ids": duplicate_ids[:20],
-            "duplicate_speech_id_count": len(duplicate_ids),
-            "duplicate_text_count": duplicate_text_count, "errors": errors, "valid": not errors and not duplicate_ids}
+            "country_year_counts": dict(sorted(years.items())), "duplicate_speech_ids": duplicate_ids,
+            "duplicate_speech_id_count": duplicate_id_count, "empty_speeches": empty_count,
+            "implausible_lengths": implausible_count, "duplicate_text_count": duplicate_text_count,
+            "errors": errors, "warnings": warnings, "valid": not errors and duplicate_id_count == 0}
 
 
 def main() -> None:

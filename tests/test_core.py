@@ -121,6 +121,22 @@ class AnalysisTests(unittest.TestCase):
         result = aggregate_results(speeches, {"short": {"fraction_ai": 0.5, "fraction_ai_assisted": 0.0}})
         self.assertEqual(result, [])
 
+    def test_analysis_accepts_a_lazy_response_resolver(self):
+        speeches = [{"country": "Germany", "date": "2024-01-01", "word_count": 40, "speech_id": "p"}]
+        calls = []
+        def resolve(speech):
+            calls.append(speech["speech_id"])
+            return {"fraction_ai": 0.25, "fraction_ai_assisted": 0.0}
+        result = aggregate_results(iter(speeches), resolve)
+        self.assertEqual(calls, ["p"])
+        self.assertAlmostEqual(result[0]["ai_word_share"], 0.25)
+
+    def test_lazy_resolver_is_not_called_for_filtered_speeches(self):
+        speeches = [{"country": "Germany", "date": "2024-01-01", "word_count": 39, "speech_id": "short"}]
+        def resolve(speech):
+            raise AssertionError("response resolver was called")
+        self.assertEqual(aggregate_results(speeches, resolve), [])
+
     def test_uses_pangram_window_word_counts_when_available(self):
         speeches = [{"country": "Poland", "date": "2024-01-01", "word_count": 10, "speech_id": "p1"}]
         responses = {"p1": {"fraction_ai": 0.9, "fraction_ai_assisted": 0.0,
