@@ -28,7 +28,7 @@ The API key is **not** the only blocker: post-cutoff German XML, the full Polish
 
 ## Run the verified smoke workflow
 
-Python 3.11 or later; no third-party runtime packages are required. The launcher uses `.venv/bin/python`, or `uv` with Python 3.12 when `.venv` is absent.
+Python 3.11 or later. The only runtime dependency is `pypdf==6.1.1`, used for the two Spain PDF fallback journals. The launcher uses `.venv/bin/python`, or `uv` with Python 3.12 when `.venv` is absent.
 
 ```bash
 uv venv --python 3.12 .venv
