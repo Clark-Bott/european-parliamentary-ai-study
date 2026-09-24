@@ -56,6 +56,13 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
     with target.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
+    country_hashes = {}
+    for country, path in paths.items():
+        country_digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                country_digest.update(chunk)
+        country_hashes[country] = country_digest.hexdigest()
     # Controls are separate from the full historical archive. The sampler is
     # deterministic and works country-by-country, avoiding combined-corpus RAM.
     controls: list[dict] = []
@@ -70,6 +77,18 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
               "start_year": start_year, "end_year": end_year}
     manifest = target.parent.parent / "manifests" / "combined_corpus.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
+    gap_paths = {
+        "Germany": manifest.parent / "germany_unavailable_protocols.json",
+        "Spain": manifest.parent / "spain_unavailable_journals.json",
+    }
+    unresolved_source_gaps = {
+        country: str(path) for country, path in gap_paths.items()
+        if path.is_file() and json.loads(path.read_text(encoding="utf-8"))
+    }
+    report["country_sha256"] = country_hashes
+    report["source_gap_reports"] = {country: str(path) for country, path in gap_paths.items()}
+    report["unresolved_source_gaps"] = unresolved_source_gaps
+    report["paid_inference_ready"] = not unresolved_source_gaps
     manifest.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return report
 

@@ -335,7 +335,15 @@ class PipelineTests(unittest.TestCase):
             result = build_six_country_corpus(root / "speeches.jsonl", sample_size=1)
             self.assertEqual(len(list(iter_jsonl(root / "speeches.jsonl"))), 6)
             self.assertEqual(result["sample_records"], 6)
+            self.assertEqual(set(result["country_sha256"]), {
+                "Germany", "France", "Netherlands", "Italy", "Spain", "Poland"})
+            self.assertTrue(result["paid_inference_ready"])
             self.assertTrue((root.parent / "manifests/combined_corpus.json").is_file())
+            gap = root.parent / "manifests/spain_unavailable_journals.json"
+            write_jsonl(gap, [{"term": 14, "number": 59}])
+            blocked = build_six_country_corpus(root / "speeches.jsonl", sample_size=1)
+            self.assertFalse(blocked["paid_inference_ready"])
+            self.assertIn("Spain", blocked["unresolved_source_gaps"])
 
     def test_paid_mode_refuses_incomplete_corpus_before_any_network_call(self):
         with tempfile.TemporaryDirectory() as directory:
