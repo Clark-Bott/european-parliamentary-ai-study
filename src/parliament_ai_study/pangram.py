@@ -113,6 +113,14 @@ class PangramClient:
             raise ValueError("Pangram response must be a JSON object")
         return parsed
 
+    def available_models(self) -> list[str]:
+        """Read-only entitlement check before any billable task submission."""
+        response = self._request("GET", "/models")
+        models = response.get("models")
+        if not isinstance(models, list) or not all(isinstance(item, str) for item in models):
+            raise ValueError("Pangram model catalog has invalid format")
+        return models
+
     def analyze(self, text: str, cache: ResponseCache, *, allow_paid: bool = False) -> dict[str, Any]:
         configuration = {"model": self.model, "public_dashboard_link": False}
         fingerprint = request_fingerprint(text, configuration)
@@ -131,12 +139,26 @@ class PangramClient:
         if pending is None:
             if not allow_paid:
                 raise PermissionError("paid Pangram inference requires explicit authorization")
-            try:
-                created = self._request("POST", "/task", {
-                    "text": text, "model": self.model, "public_dashboard_link": False})
-            except (HTTPError, URLError, TimeoutError, OSError) as exc:
-                cache.mark_unknown(fingerprint, f"POST outcome may be ambiguous: {exc}")
-                raise RuntimeError("submission outcome unknown; refusing automatic resubmission") from exc
+            for attempt in range(8):
+                try:
+                    created = self._request("POST", "/task", {
+                        "text": text, "model": self.model, "public_dashboard_link": False})
+                    break
+                except HTTPError as exc:
+                    # The server rejected a rate-limited request. Only this
+                    # explicit non-acceptance is safe to retry automatically.
+                    if exc.code == 429 and attempt < 7:
+                        retry_after = exc.headers.get("Retry-After", "") if exc.headers else ""
+                        wait = float(retry_after) if retry_after.isdigit() else min(2 ** attempt, self.max_backoff)
+                        self.sleep(min(wait, self.max_backoff))
+                        continue
+                    if exc.code == 429 or exc.code in (400, 401, 402, 403, 413, 422):
+                        raise
+                    cache.mark_unknown(fingerprint, f"POST HTTP status {exc.code}; billing outcome unknown")
+                    raise RuntimeError("submission outcome unknown; refusing automatic resubmission") from exc
+                except (URLError, TimeoutError, OSError) as exc:
+                    cache.mark_unknown(fingerprint, f"POST outcome may be ambiguous: {type(exc).__name__}")
+                    raise RuntimeError("submission outcome unknown; refusing automatic resubmission") from exc
             task_id = created.get("task_id")
             if not isinstance(task_id, str) or not task_id:
                 cache.mark_unknown(fingerprint, "POST response did not include task_id")

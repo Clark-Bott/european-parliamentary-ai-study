@@ -9,6 +9,7 @@ import sys
 from .cost import estimate_cost
 from .io import read_jsonl
 from .pipeline import run_pipeline
+from .sources.build import build_six_country_corpus
 
 
 def load_dotenv(path: Path = Path(".env")) -> None:
@@ -33,6 +34,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--price-per-1000-words", type=float, default=None)
     parser.add_argument("--confirm-paid-run", action="store_true", help="required explicit authorization for paid inference")
     parser.add_argument("--estimate-only", action="store_true", help="print cost table and exit without inference or analysis")
+    parser.add_argument("--build-corpus", action="store_true", help="acquire/rebuild missing country corpora before a dry run or estimate")
     parser.add_argument("--country", help="optional country filter for --estimate-only")
     parser.add_argument("--year", type=int, action="append", help="optional year filter (repeatable) for --estimate-only")
     parser.add_argument("--period", choices=("historical", "post_chatgpt"), help="optional period filter for --estimate-only")
@@ -50,6 +52,10 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("price must be non-negative")
     if args.dry_run and args.confirm_paid_run:
         raise SystemExit("--dry-run and --confirm-paid-run cannot be combined")
+    if not args.dry_run and not args.estimate_only and not args.confirm_paid_run:
+        raise SystemExit("refusing paid inference without --confirm-paid-run")
+    if args.build_corpus or (not args.dry_run and not args.corpus.is_file()):
+        build_six_country_corpus(args.corpus)
     if args.estimate_only:
         if not args.corpus.is_file():
             raise SystemExit(f"corpus not found: {args.corpus}")

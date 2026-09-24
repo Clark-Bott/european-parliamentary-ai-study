@@ -1,8 +1,10 @@
 from collections import Counter
+from io import BytesIO
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.error import HTTPError
 
 from parliament_ai_study.analysis import aggregate_results
 from parliament_ai_study.cost import estimate_cost
@@ -11,6 +13,7 @@ from parliament_ai_study.models import Speech, word_count
 from parliament_ai_study.pangram import PangramClient, ResponseCache, request_fingerprint
 from parliament_ai_study.pipeline import run_pipeline
 from parliament_ai_study.sampling import sample_historical_controls
+from parliament_ai_study.sources.build import build_six_country_corpus
 
 
 class SpeechSchemaTests(unittest.TestCase):
@@ -172,6 +175,34 @@ class HistoricalSamplingTests(unittest.TestCase):
 
 
 class PangramClientTests(unittest.TestCase):
+    def test_model_discovery_and_safe_rate_limit_retry(self):
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, data): self.data = json.dumps(data).encode()
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return self.data
+
+        def opener(request, timeout):
+            calls.append((request.method, request.full_url))
+            if request.full_url.endswith("/models"):
+                return FakeResponse({"models": ["default", "pangram-4"]})
+            if request.method == "POST" and sum(method == "POST" for method, _ in calls) == 1:
+                raise HTTPError(request.full_url, 429, "rate limit", {"Retry-After": "1"}, BytesIO())
+            if request.method == "POST":
+                return FakeResponse({"task_id": "task-safe"})
+            return FakeResponse({"stage": "STAGE_SUCCESS", "fraction_ai": 0.0,
+                                 "fraction_ai_assisted": 0.0, "fraction_human": 1.0})
+
+        with tempfile.TemporaryDirectory() as directory:
+            waits = []
+            client = PangramClient("not-real", model="pangram-4", opener=opener, sleep=waits.append)
+            self.assertIn("pangram-4", client.available_models())
+            client.analyze("Test words", ResponseCache(directory), allow_paid=True)
+            self.assertEqual(sum(method == "POST" for method, _ in calls), 2)
+            self.assertEqual(waits, [1.0])
+
     def test_concurrent_inference_for_same_text_submits_only_once(self):
         import json
         import threading
@@ -270,6 +301,19 @@ class PangramClientTests(unittest.TestCase):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_build_combines_six_existing_country_corpora_and_writes_controls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "data/processed"
+            for country in ("germany", "france", "netherlands", "italy", "spain", "poland"):
+                write_jsonl(root / f"{country}_speeches.jsonl", [{
+                    "country": country.title(), "date": "2019-03-01",
+                    "speech_id": country, "speaker_id": country, "word_count": 100,
+                    "speech_text": "historical synthetic fixture"}])
+            result = build_six_country_corpus(root / "speeches.jsonl", sample_size=1)
+            self.assertEqual(len(list(iter_jsonl(root / "speeches.jsonl"))), 6)
+            self.assertEqual(result["sample_records"], 6)
+            self.assertTrue((root.parent / "manifests/combined_corpus.json").is_file())
+
     def test_paid_mode_refuses_incomplete_corpus_before_any_network_call(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

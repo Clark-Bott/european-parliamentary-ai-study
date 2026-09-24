@@ -233,6 +233,8 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
         if not secret:
             raise EnvironmentError("PANGRAM_API_KEY is required")
         client = PangramClient(secret, model=model)
+        if model not in client.available_models():
+            raise ValueError(f"Pangram model {model!r} is not available to this API key")
         cache = ResponseCache(target / "raw_pangram")
         responses = {}
         eligible_speeches = [speech for speech in speeches if int(speech.get("word_count", 0)) >= 40]
