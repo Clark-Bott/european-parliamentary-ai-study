@@ -1,0 +1,24 @@
+{
+  "comparison_date": "2026-09-24",
+  "archive_sha256": {
+    "15": "9c6b38cb0e63fd17b1e1754f87e77bdf593769e4b7dd2e356d5b9af977efe7f4",
+    "16": "52519bf690fd31720f568a311a60dcda79c57adea5ee9c6de16c1b171127a424",
+    "17": "286d23a57d30e056f8603eb1c6f4b5e3eae22e3338da551298097deeff5f2700"
+  },
+  "pre_role_parser": {
+    "git_commit": "6e5bb696ffc8a1f095d04133f04564d3cdce00a",
+    "output_sha256": "668b1dc6833c76a66e9be1abcd0cb28d19ff23ffa3a88e0d50c84b1ab2ae0578",
+    "records": 1243606,
+    "words": 75392623
+  },
+  "current_parser": {
+    "output_sha256": "71321690b0fb2f40f92ea44a9b14d2d78069431a1bec7a56e10a5837e7c72dbd",
+    "records": 1243606,
+    "words": 75392623
+  },
+  "different_speech_ids": 0,
+  "different_speech_texts": 0,
+  "different_speaker_roles": 419188,
+  "different_fields": ["speaker_role"],
+  "conclusion": "The parser hardening and presiding-officer role enrichment did not change record count, IDs, or text. The earlier 1243388-record run is not reproducible from these verified archives with either the pre-role or current parser and remains a historical execution discrepancy."
+}
