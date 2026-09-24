@@ -6,6 +6,7 @@ from http.client import IncompleteRead
 
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
+from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links
 from parliament_ai_study.sources.italy import parse_camera_html
 from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml
 from parliament_ai_study.sources.sejm import parse_sejm_statement
@@ -94,6 +95,29 @@ class ManifestTests(unittest.TestCase):
                           sleep=lambda _: None)
             self.assertEqual(target.read_bytes(), payload)
             self.assertEqual(requested, ["bytes=0-0", "bytes=0-3", "bytes=4-7", "bytes=8-9"])
+
+
+class BundestagParserTests(unittest.TestCase):
+    def test_official_xml_excludes_commentary_and_preserves_speaker(self):
+        xml = '''<dbtplenarprotokoll wahlperiode="21" sitzung-nr="95" sitzung-datum="23.09.2026">
+        <rede id="ID219500100"><p klasse="redner"><redner id="123"><name><vorname>Irene</vorname>
+        <nachname>Mihalic</nachname><fraktion>GRÜNE</fraktion></name></redner>Irene Mihalic:</p>
+        <p klasse="J">Sehr geehrte Frau Präsidentin!</p><kommentar>(Beifall)</kommentar>
+        <p klasse="O">Das ist wichtig für alle Bürgerinnen und Bürger.</p></rede></dbtplenarprotokoll>'''
+        rows = parse_bundestag_xml(xml, source_url="https://www.bundestag.de/resource/blob/1/21095.xml")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].date, "2026-09-23")
+        self.assertEqual(rows[0].speaker_name, "Irene Mihalic")
+        self.assertEqual(rows[0].party, "GRÜNE")
+        self.assertIn("Bürgerinnen", rows[0].speech_text)
+        self.assertNotIn("Beifall", rows[0].speech_text)
+        self.assertIn("Beifall", rows[0].raw_text)
+        self.assertTrue(rows[0].source_url.endswith("#ID219500100"))
+
+    def test_listing_links_only_xml(self):
+        links = _Links()
+        links.feed('<a href="/resource/blob/1/21095.xml">XML</a><a href="/other.pdf">PDF</a>')
+        self.assertEqual(links.links, ["https://www.bundestag.de/resource/blob/1/21095.xml"])
 
 
 class ItalyParserTests(unittest.TestCase):
