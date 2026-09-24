@@ -1,0 +1,38 @@
+{
+  "parser": "pypdf-6.1.1-coordinate-v1",
+  "validation_date": "2026-09-24",
+  "cases": [
+    {
+      "journal": "DSCD-12-PL-162",
+      "date": "2018-10-31",
+      "official_pdf_sha256": "1dc99c22aeb70cbade915c4b0e86d988d1af3e5d3ab20a365f754a99fa7d3374",
+      "pages": 62,
+      "pdftotext_words": 45488,
+      "parsed_turns": 252,
+      "parsed_words": 24091,
+      "output_sha256": "1a734f953deebd4732b58a70ec6bfaac51ab181fdb06337026f3fce521fe84b0",
+      "independent_candidate_count": 252,
+      "notes": "pdfminer.six and Poppler produced the same 252 speaker-label candidates. Text cleanup remains subject to manual boundary review."
+    },
+    {
+      "journal": "DSCD-14-PL-59",
+      "date": "2020-10-29",
+      "official_pdf_sha256": "b69d7d39c79cf15463d662ce49a8d835fcd576b2060a25ba26f86a72572aa4b3",
+      "pages": 78,
+      "pdftotext_words": 61375,
+      "parsed_turns": 148,
+      "parsed_words": 21146,
+      "output_sha256": "29bf6aa3ce74514897973f6b678b59312973b1e37ec4c1bab46e642b577a673e",
+      "independent_candidate_count": 148,
+      "notes": "pdfminer.six and Poppler produced the same 148 speaker-label candidates. Text cleanup remains subject to manual boundary review."
+    }
+  ],
+  "checks": {
+    "repeat_parse_deterministic": true,
+    "opening_marker_required": true,
+    "stage_cues_removed_from_speech_text": true,
+    "raw_text_retains_stage_cues": true,
+    "no_empty_turns": true,
+    "manual_random_boundary_review_complete": false
+  }
+}

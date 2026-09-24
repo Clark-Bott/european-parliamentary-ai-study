@@ -159,7 +159,7 @@ def audit_congreso_raw_coverage(raw_dir: str | Path = "data/raw") -> dict:
 
 def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                           raw_dir: str | Path = "data/raw",
-                          manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int]:
+                          manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int | str]:
     counts = {"records": 0, "words": 0, "journals": 0, "pdf_fallback_journals": 0}
     gaps: list[dict[str, str | int]] = []
 
