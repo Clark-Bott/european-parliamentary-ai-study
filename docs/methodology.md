@@ -8,9 +8,11 @@ The target population is substantive interventions entered into the plenary reco
 
 Primary estimand, conditional on a configured minimum eligible length, is the fraction of all eligible words classified AI-generated:
 
-`AI-only word share = sum(text word_count × Pangram AI-generated fraction) / sum(eligible word_count)`
+`AI-only word share = sum(Pangram window word_count where label == AI-Generated) / sum(eligible source word_count)`
 
-AI-assisted/mixed fraction is reported separately and also in a clearly labeled combined sensitivity estimate. Pangram returns asynchronous task results and a short classification plus fractions for AI-written, AI-assisted, and human-written text; the exact response contract must be validated against current official API documentation before any paid use.[2]
+If a response lacks segment word counts, the current implementation estimates the numerator as source word_count × Pangram `fraction_ai`; report that as a fallback approximation, not an exact word count.
+
+AI-assisted/mixed fraction is reported separately and also in a clearly labeled combined sensitivity estimate. Pangram's current official API documentation confirms an asynchronous task flow: POST `/task` returns a task ID; polling GET `/task/{task_id}` continues until `STAGE_SUCCESS` or `STAGE_FAILED`. The successful response includes `fraction_ai`, `fraction_ai_assisted`, `fraction_human`, and (on Pangram 4) windows with labels and `word_count` values. It also states Pangram 4 may normalize submitted text, so window offsets refer to the returned text.[2] The client submits one intervention per task and sends an explicit model selector. Our primary word estimate sums Pangram's `word_count` for `AI-Generated` windows; assisted words are tabulated separately. For older/alternate responses without windows, the pipeline uses the returned fractions times the source corpus word count, which is an approximation and is recorded as a limitation.
 
 ## Time periods and controls
 
@@ -18,7 +20,7 @@ Use 2018–2021 as pre-LLM historical controls, 2022 as a transition year, and 2
 
 ## Cleaning and inclusion
 
-An intervention must have non-empty text, a traceable source record, a plausible date, and a speaker boundary. Deterministic cleaning may remove markup and explicit applause/stage annotations, but must preserve the raw source and record all excluded spans or reasons. Procedural formulas, chair boilerplate, brief interruptions, and voting text require source-specific rules documented and tested against samples; do not use an opaque global regex as a substitute for validation. Speaker roles and minister/chair status are retained so exclusions can be sensitivity analyses.
+An intervention must have non-empty text, a traceable source record, a plausible date, and a speaker boundary. The current implementation's default minimum eligible length is 40 words; shorter turns are retained in normalized source outputs but excluded from inference and the primary aggregate. The 40-word cutoff is a transparent project design choice, not a reconstructed Economist rule, and should be varied in sensitivity analyses. Deterministic cleaning may remove markup and explicit applause/stage annotations, but must preserve the raw source and record all excluded spans or reasons. Procedural formulas, chair boilerplate, brief interruptions, and voting text require source-specific rules documented and tested against samples; do not use an opaque global regex as a substitute for validation. Speaker roles and minister/chair status are retained so exclusions can be sensitivity analyses.
 
 ## Analysis plan
 

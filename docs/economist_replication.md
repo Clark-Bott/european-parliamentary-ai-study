@@ -2,11 +2,12 @@
 
 ## Scope and source access
 
-A story metadata mirror lists *The Economist* headline “AI-written speeches are taking over politics,” describes the subtitle as “British MPs are avid users. But they have nothing on Australians or Canadians,” and says it appeared on economist.com on 23 September 2026 at 18:20:26.[1] This is metadata, not the article body or a methodology note. Direct extraction of the Economist URL returned no article text; attempts to locate a Wayback snapshot were rate-limited/unavailable. No Economist source note, code repository, data download, or detector configuration was recovered in this pass. The user's brief states that the inspiration used Pangram; that statement is retained as a project premise to verify, not upgraded here into an independently confirmed article fact.
+The official Economist article page resolves at the URL shown below and confirms the headline “AI-written speeches are taking over politics,” but page extraction returned only a short section label rather than the story body. A third-party metadata mirror reports the subtitle “British MPs are avid users. But they have nothing on Australians or Canadians” and says it appeared on economist.com on 23 September 2026 at 18:20:26.[1][17] The metadata mirror is not the article or a methodology note. No source note, code repository, downloadable data, or detector configuration was recovered. The project brief identifies Pangram as the study's inspiration; accessible primary text does not yet independently confirm which Pangram configuration was used.
 
 ## CONFIRMED
 
-- The contemporaneous story metadata exists and reports that headline, subtitle, and timestamp.[1]
+- The official Economist article page is live and titled “AI-written speeches are taking over politics”; the available extraction did not expose its body or methodological notes.[17]
+- A third-party story metadata mirror reports a comparative subtitle and publication timestamp.[1]
 - The user's project brief defines cross-country extension to six non-English chambers and a 2018–2026 period. This is the project's requested scope, not a confirmed description of The Economist's sample or method.
 
 ## INFERRED WITH EVIDENCE

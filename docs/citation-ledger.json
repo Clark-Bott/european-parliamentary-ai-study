@@ -96,6 +96,48 @@
       "url": "https://api.sejm.gov.pl/sejm.html",
       "title": "Sejm API reference",
       "accessed": "2026-09-24"
+    },
+    {
+      "id": 17,
+      "url": "https://www.economist.com/britain/2026/09/23/ai-written-speeches-are-taking-over-politics",
+      "title": "AI-written speeches are taking over politics",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 18,
+      "url": "https://www.camera.it/leg19/410?idSeduta=0711&tipo=stenografico",
+      "title": "Camera dei deputati, stenographic record of sitting 711",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 19,
+      "url": "https://api.sejm.gov.pl/sejm/openapi/ui/",
+      "title": "Sejm official OpenAPI transcript endpoints",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 20,
+      "url": "https://api.sejm.gov.pl/sejm/term10/proceedings/1/2023-11-13/transcripts",
+      "title": "Sejm proceeding 1 transcript statement metadata sample",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 21,
+      "url": "https://www.assemblee-nationale.fr/dyn/16/comptes-rendus/seance/session-ordinaire-de-2023-2024/deuxieme-seance-du-mardi-30-janvier-2024",
+      "title": "Official Assembly sitting transcript, 30 January 2024",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 22,
+      "url": "https://api.sejm.gov.pl/sejm/term10/proceedings/1/2023-11-13/transcripts/27",
+      "title": "Sejm official individual statement body sample",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 23,
+      "url": "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/Verslag(3c34d93e-6ef7-4cfb-8fbe-adec483d6b60)/resource",
+      "title": "Tweede Kamer corrected final transcript XML sample",
+      "accessed": "2026-09-24"
     }
   ]
 }
