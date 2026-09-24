@@ -12,6 +12,8 @@ data/interim/**
 !data/interim/.gitkeep
 data/processed/**
 !data/processed/.gitkeep
+data/controls/**
+!data/controls/.gitkeep
 
 # Per-text results can contain copyrighted transcript text returned by the API.
 results/raw_pangram/**

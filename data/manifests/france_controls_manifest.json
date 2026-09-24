@@ -1,0 +1,29 @@
+{
+  "manifest_version": 1,
+  "country": "France",
+  "control_period": "2018-2021",
+  "sampler": "parliament_ai_study.sampling.sample_historical_controls",
+  "seed": 2026,
+  "sample_size_per_country": 1000,
+  "minimum_words": 40,
+  "maximum_per_identified_speaker": 2,
+  "input": {
+    "path": "data/processed/france_leg15_2018_2021.jsonl",
+    "sha256": "ba100b4b3abedfe45b256b225cbbea62de151c1760c299b23096e920f6855caa",
+    "source_records": 619447
+  },
+  "output": {
+    "path": "data/controls/france_historical_control_2018_2021_seed2026.jsonl",
+    "sha256": "8f7c9e4dfcee087e86817cfbffb6360c341d0257706c209d872d217ba90ec36d",
+    "records": 1000,
+    "words": 227069,
+    "records_by_year": {"2018": 250, "2019": 250, "2020": 250, "2021": 250},
+    "records_by_length_band": {"short_40_99": 334, "medium_100_249": 333, "long_250_plus": 333},
+    "distinct_non_sentinel_speakers": 471,
+    "maximum_non_sentinel_speaker_reuse": 2,
+    "sentinel_or_missing_speaker_id_rows": 215,
+    "unknown_party_rows": 775,
+    "estimated_pangram4_list_cost_usd_at_0_50_per_1000_words": 113.5345
+  },
+  "interpretation": "Historical detector calibration sample only; not ground truth. No inference was run."
+}

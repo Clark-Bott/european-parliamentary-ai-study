@@ -16,7 +16,7 @@ AI-assisted/mixed fraction is reported separately and also in a clearly labeled 
 
 ## Time periods and controls
 
-Use 2018–2021 as pre-LLM historical controls, 2022 as a transition year, and 2023 onward as post-ChatGPT. Current endpoint availability, not a presumed complete 2026 year, sets the latest observed date. A deterministic seed and stratification by country, year, speaker, party (if reliable), and length band will govern any sampled control corpus. Complete historic corpora are retained when practical. Country-language baseline estimates are diagnostic/sensitivity adjustments, never ground truth.
+Use 2018–2021 as pre-LLM historical controls, 2022 as a transition year, and 2023 onward as post-ChatGPT. Current endpoint availability, not a presumed complete 2026 year, sets the latest observed date. The reproducible sampler uses a fixed seed, round-robin quotas across years and party/length strata, and a maximum per identified speaker; unknown parties remain a visible stratum, and unknown speaker IDs fall back to speech-specific keys. The first French local control sample and its missing-party caveat are in [`historical_controls.md`](historical_controls.md). Complete historic corpora are retained when practical. Country-language baseline estimates are diagnostic/sensitivity adjustments, never ground truth.
 
 ## Cleaning and inclusion
 

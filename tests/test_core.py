@@ -1,3 +1,4 @@
+from collections import Counter
 import json
 import tempfile
 import unittest
@@ -5,9 +6,11 @@ from pathlib import Path
 
 from parliament_ai_study.analysis import aggregate_results
 from parliament_ai_study.cost import estimate_cost
+from parliament_ai_study.io import iter_jsonl, write_jsonl
 from parliament_ai_study.models import Speech, word_count
 from parliament_ai_study.pangram import PangramClient, ResponseCache, request_fingerprint
 from parliament_ai_study.pipeline import run_pipeline
+from parliament_ai_study.sampling import sample_historical_controls
 
 
 class SpeechSchemaTests(unittest.TestCase):
@@ -30,6 +33,15 @@ class SpeechSchemaTests(unittest.TestCase):
         self.assertEqual(restored.speech_text, "Goedemorgen, collega’s.")
         self.assertEqual(restored.word_count, 2)
         self.assertEqual(restored.source_identifier, "speech-1")
+
+
+class JsonLinesTests(unittest.TestCase):
+    def test_stream_reader_round_trips_json_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rows.jsonl"
+            expected = [{"id": 1}, {"id": 2, "text": "grüße"}]
+            write_jsonl(path, expected)
+            self.assertEqual(list(iter_jsonl(path)), expected)
 
 
 class CostTests(unittest.TestCase):
@@ -102,6 +114,54 @@ class CacheTests(unittest.TestCase):
             fingerprint = request_fingerprint("text", {"model": "pangram-4"})
             cache.store(fingerprint, {"stage": "STAGE_SUCCESS", "fraction_ai": 0.2})
             self.assertEqual(cache.load(fingerprint)["fraction_ai"], 0.2)
+
+
+class HistoricalSamplingTests(unittest.TestCase):
+    def test_sampling_is_seeded_balanced_and_limits_speaker_reuse(self):
+        records = []
+        for year in range(2018, 2022):
+            for party in ("A", "B"):
+                for length in (80, 180):
+                    sid = f"{year}-{party}-{length}"
+                    records.append({"country": "France", "date": f"{year}-04-01",
+                                   "speech_id": sid, "speaker_id": sid,
+                                   "party": party, "word_count": length})
+        records.append({"country": "France", "date": "2022-01-01", "speech_id": "transition",
+                        "speaker_id": "transition", "party": "C", "word_count": 180})
+        first = sample_historical_controls(records, sample_size_per_country=8, seed=17, max_per_speaker=1)
+        second = sample_historical_controls(records, sample_size_per_country=8, seed=17, max_per_speaker=1)
+        self.assertEqual([r["speech_id"] for r in first], [r["speech_id"] for r in second])
+        self.assertEqual(len(first), 8)
+        self.assertEqual(len({r["speaker_id"] for r in first}), 8)
+        self.assertTrue(all(2018 <= int(r["date"][:4]) <= 2021 for r in first))
+        self.assertGreaterEqual(len({r["date"][:4] for r in first}), 3)
+    def test_zero_speaker_id_is_treated_as_missing_not_one_shared_person(self):
+        records = [
+            {"country": "France", "date": "2018-02-01", "speech_id": "one", "speaker_id": "0",
+             "party": "A", "word_count": 60},
+            {"country": "France", "date": "2018-02-02", "speech_id": "two", "speaker_id": "0",
+             "party": "B", "word_count": 60},
+        ]
+        sample = sample_historical_controls(records, sample_size_per_country=2, max_per_speaker=1)
+        self.assertEqual(len(sample), 2)
+
+    def test_year_balance_is_not_swamped_by_many_parties_in_one_year(self):
+        records = []
+        for year in (2018, 2019, 2020):
+            for person in range(30):
+                sid = f"{year}-small-{person}"
+                records.append({"country": "France", "date": f"{year}-05-01", "speech_id": sid,
+                                "speaker_id": sid, "party": "single", "word_count": 120})
+        for party_index in range(20):
+            for person in range(30):
+                sid = f"2021-party{party_index}-{person}"
+                records.append({"country": "France", "date": "2021-05-01", "speech_id": sid,
+                                "speaker_id": sid, "party": f"party{party_index}", "word_count": 120})
+        sample = sample_historical_controls(records, sample_size_per_country=40, seed=4,
+                                            max_per_speaker=1)
+        counts = Counter(row["date"][:4] for row in sample)
+        self.assertEqual(len(sample), 40)
+        self.assertLessEqual(max(counts.values()) - min(counts.values()), 1)
 
 
 class PangramClientTests(unittest.TestCase):

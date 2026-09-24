@@ -14,7 +14,7 @@ The French official Syceron archives for legislatures 15–17 have been acquired
 
 Official API ingestion/parser code also exists for Sejm statement bodies and Tweede Kamer final corrected plenary reports; an explicit-sitting Camera HTML parser is also implemented. Live sample retrievals produced 43 Polish interventions / 19,291 words from one sitting day, 308 Dutch interventions / 55,561 words from one corrected sitting report, and 47 Italian interventions / 1,808 words from one sitting. These are samples, not full national corpora. Germany and Spain remain reconnaissance-only; Italy's session index and full historical corpus are not yet ready.[9][15][16][18][19][20][22][23]
 
-The repository includes a canonical multilingual speech schema, source downloader with SHA-256 manifests, general integrity checks, a Pangram asynchronous task client, content/configuration-addressed caching, retry/poll handling, ambiguous-submission protection, cost estimation, an explicit paid-run authorization flag, and analysis/output generation. The test suite and one-command synthetic dry run pass. No Pangram inference has been run.[2]
+The repository includes a canonical multilingual speech schema, source downloader with SHA-256 manifests, general integrity checks, a deterministic historical-control sampler (with a French 1,000-record sample generated locally), a Pangram asynchronous task client, content/configuration-addressed caching, retry/poll handling, ambiguous-submission protection, cost estimation, an explicit paid-run authorization flag, and analysis/output generation. The test suite and one-command synthetic dry run pass. No Pangram inference has been run.[2]
 
 ## Proposed inference scope and estimated cost
 
