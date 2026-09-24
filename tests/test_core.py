@@ -105,6 +105,56 @@ class CacheTests(unittest.TestCase):
 
 
 class PangramClientTests(unittest.TestCase):
+    def test_concurrent_inference_for_same_text_submits_only_once(self):
+        import json
+        import threading
+        import time
+
+        calls = []
+        call_lock = threading.Lock()
+        post_started = threading.Event()
+        release_post = threading.Event()
+        errors = []
+
+        class FakeResponse:
+            def __init__(self, value): self.data = json.dumps(value).encode()
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return self.data
+
+        def opener(request, timeout):
+            with call_lock:
+                calls.append(request.method)
+            if request.method == "POST":
+                post_started.set()
+                release_post.wait(timeout=2)
+                return FakeResponse({"task_id": "shared-task"})
+            return FakeResponse({"stage": "STAGE_SUCCESS", "fraction_ai": 0.1,
+                                 "fraction_ai_assisted": 0.1, "fraction_human": 0.8})
+
+        with tempfile.TemporaryDirectory() as directory:
+            client = PangramClient("test-key", model="pangram-4", opener=opener,
+                                   sleep=lambda _: None, max_poll_attempts=1)
+            cache = ResponseCache(Path(directory))
+            outputs = []
+            def run():
+                try: outputs.append(client.analyze("same text", cache, allow_paid=True))
+                except Exception as exc: errors.append(exc)
+            first = threading.Thread(target=run)
+            second = threading.Thread(target=run)
+            first.start()
+            self.assertTrue(post_started.wait(timeout=1))
+            second.start()
+            time.sleep(0.05)
+            release_post.set()
+            first.join(timeout=2)
+            second.join(timeout=2)
+            self.assertFalse(first.is_alive())
+            self.assertFalse(second.is_alive())
+            self.assertEqual(errors, [])
+            self.assertEqual(len(outputs), 2)
+            self.assertEqual(calls.count("POST"), 1)
+
     def test_unknown_post_outcome_blocks_automatic_resubmission(self):
         fingerprint = request_fingerprint("text", {"model": "pangram-4", "public_dashboard_link": False})
         with tempfile.TemporaryDirectory() as directory:

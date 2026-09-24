@@ -5,12 +5,14 @@ is not automatically retried: doing so could cause duplicate inference charges.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -27,6 +29,18 @@ class ResponseCache:
     def __init__(self, directory: str | Path):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
+
+    @contextmanager
+    def lock(self, fingerprint: str) -> Iterator[None]:
+        """Serialize cache check-and-submit across threads and processes."""
+        self._path(fingerprint)  # validate before constructing a lock path
+        lock_path = self.directory / f"{fingerprint}.lock"
+        with lock_path.open("a+b") as stream:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
     def _path(self, fingerprint: str) -> Path:
         if len(fingerprint) != 64 or any(c not in "0123456789abcdef" for c in fingerprint):
@@ -102,6 +116,11 @@ class PangramClient:
     def analyze(self, text: str, cache: ResponseCache, *, allow_paid: bool = False) -> dict[str, Any]:
         configuration = {"model": self.model, "public_dashboard_link": False}
         fingerprint = request_fingerprint(text, configuration)
+        with cache.lock(fingerprint):
+            return self._analyze_locked(text, cache, fingerprint, allow_paid=allow_paid)
+
+    def _analyze_locked(self, text: str, cache: ResponseCache, fingerprint: str,
+                        *, allow_paid: bool) -> dict[str, Any]:
         cached = cache.load(fingerprint)
         if cached is not None:
             return cached
