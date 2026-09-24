@@ -147,6 +147,7 @@ def _write_outputs(corpus_path: str | Path,
         "estimated_api_units": estimate["estimated_api_units"], "estimated_cost": estimate["estimated_cost"]}])
     periods = {}
     for granularity in ("month", "quarter", "year"):
+        print(f"Aggregating detector output by {granularity}…", flush=True)
         aggregated = aggregate_results(iter_jsonl(corpus_path), response_for_speech,
                                       period=granularity)
         periods[granularity] = aggregated
@@ -174,6 +175,7 @@ def _write_outputs(corpus_path: str | Path,
     sensitivity = []
     for minimum in (40, 100, 250):
         for exclusion in ("none", "ministers", "chairs"):
+            print(f"Sensitivity: min_words={minimum}, excluded_role={exclusion}", flush=True)
             for row in aggregate_results(iter_jsonl(corpus_path), response_for_speech,
                                          period="year", min_words=minimum,
                                          exclude_ministers=exclusion == "ministers",

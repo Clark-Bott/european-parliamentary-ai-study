@@ -79,6 +79,8 @@ def audit_corpus_file(path: str | Path, *, start_year: int = 2018,
                     duplicate_text_count += 1
             if len(errors) > 1000:
                 raise ValueError("too many corpus integrity errors; first: " + "; ".join(errors[:5]))
+            if index % 500_000 == 0:
+                print(f"QA: {index:,} records checked ({words:,} words)", flush=True)
         connection.close()
     return {"records": sum(counts.values()), "words": words, "countries": dict(counts),
             "country_year_counts": dict(sorted(years.items())), "duplicate_speech_ids": duplicate_ids,
