@@ -166,6 +166,21 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
                  "ai_plus_mixed_word_share": (values["ai_words_estimate"] + values["mixed_words_estimate"]) / values["words"]}
                 for (country, label), values in sorted(pre_post_groups.items()) if values["words"]]
     _write_csv(tables / "pre_post_comparison.csv", pre_post)
+    control_rates = {row["country"]: row["ai_word_share"] for row in pre_post
+                     if row["period_group"] == "pre-LLM control"}
+    sensitivity = []
+    for minimum in (40, 100, 250):
+        for exclusion in ("none", "ministers", "chairs"):
+            for row in aggregate_results(speeches, responses, period="year", min_words=minimum,
+                                         exclude_ministers=exclusion == "ministers",
+                                         exclude_chairs=exclusion == "chairs"):
+                baseline_rate = control_rates.get(row["country"])
+                sensitivity.append({**row, "min_words": minimum, "excluded_role": exclusion,
+                                    "historical_baseline_ai_share": baseline_rate,
+                                    "baseline_adjusted_ai_share_sensitivity":
+                                    max(0.0, row["ai_word_share"] - baseline_rate)
+                                    if baseline_rate is not None else None})
+    _write_csv(tables / "sensitivity.csv", sensitivity)
     _write_svg(figures / "all_countries.svg", periods["month"],
                title="Pangram-classified AI-generated word share by month" + (" (MOCKED)" if mocked else ""))
     for country in COUNTRIES:
@@ -184,7 +199,7 @@ def _write_outputs(speeches: list[dict[str, Any]], responses: dict[str, dict[str
                "Mock values are not Pangram findings and must not be cited as empirical results. "
                + ("The corpus is also a synthetic fixture. " if synthetic else "The supplied corpus may be real data. ")) if mocked else
               "This report summarizes Pangram detector output. Classification is not proof of authorship or personal AI use.", "",
-              "Outputs: annual/monthly/quarterly tables, historical baseline table, pre/post table, SVG figures, corpus QA JSON, and machine-readable result JSONL."]
+               "Outputs: annual/monthly/quarterly tables, historical baseline and pooled pre/post tables, length/role sensitivity, SVG figures, corpus QA JSON, and machine-readable result JSONL."]
     (reports / ("dry_run_report.md" if mocked else "results_report.md")).write_text("\n".join(report) + "\n", encoding="utf-8")
     return {"synthetic_smoke_test": synthetic, "mocked": mocked, "speeches": len(speeches), "words": estimate["words"],
             "estimated_cost": estimate["estimated_cost"], "countries": qa["countries_present"],

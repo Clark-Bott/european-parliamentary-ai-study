@@ -8,7 +8,8 @@ from parliament_ai_study.sources.download import download_file, file_manifest_en
 from parliament_ai_study.sources.france import parse_france_xml
 from parliament_ai_study.sources.germany import parse_bundestag_xml, _Links
 from parliament_ai_study.sources.italy import parse_camera_html, parse_camera_xml
-from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml
+from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml, iter_tweede_kamer_speeches
+from unittest.mock import patch
 from parliament_ai_study.sources.sejm import parse_sejm_statement
 from parliament_ai_study.sources.spain import parse_congreso_html, journal_url
 
@@ -32,6 +33,61 @@ class CongresoParserTests(unittest.TestCase):
 
 
 class ManifestTests(unittest.TestCase):
+    def test_unknown_range_total_falls_back_to_verified_plain_get(self):
+        with tempfile.TemporaryDirectory() as directory:
+            calls = []
+
+            class Response:
+                def __init__(self, status):
+                    self.status = status
+                    self.headers = {"Content-Type": "application/xml", **(
+                        {"Content-Range": "bytes 0-0/*"} if status == 206 else {"Content-Length": "4"})}
+                    self.data = b"<x/>" if status == 200 else b"<"
+                    self.position = 0
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self, size=-1):
+                    data = self.data[self.position:self.position + size]
+                    self.position += len(data)
+                    return data
+
+            def opener(request, timeout):
+                calls.append(request.get_header("Range"))
+                return Response(206 if request.get_header("Range") else 200)
+
+            path = Path(directory) / "archive.xml"
+            download_file("https://example.test/archive.xml", path, manifest_path=Path(directory) / "manifest.jsonl",
+                          opener=opener, sleep=lambda _: None)
+            self.assertEqual(calls, ["bytes=0-0", None])
+            self.assertEqual(path.read_bytes(), b"<x/>")
+
+    def test_download_retries_malformed_partial_content_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            calls = []
+
+            class Response:
+                status = 206
+                def __init__(self, attempt):
+                    self.sent = False
+                    self.headers = {"Content-Range": "invalid" if attempt == 1 else "bytes 0-0/1",
+                                    "Content-Type": "application/xml"}
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self, size=-1):
+                    if self.sent: return b""
+                    self.sent = True
+                    return b"x"
+
+            def opener(request, timeout):
+                calls.append(request.get_header("Range"))
+                return Response(len(calls))
+
+            path = Path(directory) / "source.xml"
+            download_file("https://example.test/source.xml", path, manifest_path=Path(directory) / "manifest.jsonl",
+                          opener=opener, retries=2, sleep=lambda _: None)
+            self.assertEqual(path.read_bytes(), b"x")
+            self.assertEqual(len(calls), 3)
+
     def test_manifest_records_hash_size_type_and_source_without_query_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "source.xml"
@@ -117,6 +173,15 @@ class ManifestTests(unittest.TestCase):
 
 
 class BundestagParserTests(unittest.TestCase):
+    def test_minister_role_comes_from_nested_official_role_label(self):
+        xml = '''<dbtplenarprotokoll wahlperiode="21" sitzung-nr="95" sitzung-datum="23.09.2026">
+          <rede id="ID1"><p klasse="redner"><redner id="1"><name><vorname>Boris</vorname>
+          <nachname>Pistorius</nachname><rolle><rolle_lang>Bundesminister der Verteidigung</rolle_lang>
+          </rolle></name></redner>Minister:</p><p>Vielen Dank für diese wichtige Frage.</p></rede>
+          </dbtplenarprotokoll>'''
+        self.assertEqual(parse_bundestag_xml(xml, source_url="https://example.org/protocol.xml")[0].speaker_role,
+                         "Bundesminister der Verteidigung")
+
     def test_official_xml_excludes_commentary_and_preserves_speaker(self):
         xml = '''<dbtplenarprotokoll wahlperiode="21" sitzung-nr="95" sitzung-datum="23.09.2026">
         <rede id="ID219500100"><p klasse="redner"><redner id="123"><name><vorname>Irene</vorname>
@@ -177,6 +242,15 @@ class ItalyParserTests(unittest.TestCase):
 
 
 class NetherlandsParserTests(unittest.TestCase):
+    def test_odata_request_respects_official_maximum_page_size(self):
+        requests = []
+        def empty(url):
+            requests.append(url)
+            return iter(())
+        with patch("parliament_ai_study.sources.netherlands._odata_pages", side_effect=empty):
+            self.assertEqual(list(iter_tweede_kamer_speeches(start_year=2025, end_year=2025)), [])
+        self.assertIn("%24top=250", requests[0])
+
     def test_extracts_speaker_attributed_dutch_intervention_and_preserves_source(self):
         xml = """<?xml version='1.0' encoding='UTF-8'?>
         <vlosCoreDocument xmlns='http://www.tweedekamer.nl/ggm/vergaderverslag/v1.0'>

@@ -4,8 +4,15 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date
 import hashlib
+import json
+from pathlib import Path
 import re
+import sqlite3
+import tempfile
 from typing import Any, Iterable
+
+from .io import iter_jsonl
+from .models import word_count
 
 COUNTRIES = ("Germany", "France", "Netherlands", "Italy", "Spain", "Poland")
 
@@ -80,3 +87,70 @@ def _valid_date(value: Any) -> bool:
         return True
     except ValueError:
         return False
+
+
+def audit_corpus_file(path: str | Path) -> dict[str, Any]:
+    """Disk-backed full-file QA without holding millions of speeches in RAM."""
+    counts: Counter[str] = Counter()
+    years: Counter[str] = Counter()
+    duplicate_ids = []
+    duplicate_text_count = 0
+    errors = []
+    words = 0
+    scratch = "/tmp/opencode" if Path("/tmp/opencode").is_dir() else None
+    with tempfile.TemporaryDirectory(prefix="parliament-qa-", dir=scratch) as tmp:
+        connection = sqlite3.connect(str(Path(tmp) / "qa.sqlite"))
+        connection.execute("CREATE TABLE ids (id TEXT PRIMARY KEY)")
+        connection.execute("CREATE TABLE texts (hash TEXT PRIMARY KEY)")
+        for index, row in enumerate(iter_jsonl(path), 1):
+            country, sid = str(row.get("country", "")), str(row.get("speech_id", ""))
+            counts[country] += 1
+            if not sid or not row.get("source_url") or not row.get("source_identifier"):
+                errors.append(f"record {index}: missing ID or provenance")
+            else:
+                try:
+                    connection.execute("INSERT INTO ids VALUES (?)", (sid,))
+                except sqlite3.IntegrityError:
+                    duplicate_ids.append(sid)
+            try:
+                day = date.fromisoformat(str(row.get("date", "")))
+                years[f"{country}:{day.year}"] += 1
+            except ValueError:
+                errors.append(f"record {index}: invalid date")
+            text = str(row.get("speech_text", ""))
+            if not text.strip() or int(row.get("word_count", -1)) != word_count(text):
+                errors.append(f"record {index}: empty text or inconsistent word count")
+            else:
+                words += int(row["word_count"])
+                digest = hashlib.sha256(" ".join(text.casefold().split()).encode("utf-8")).hexdigest()
+                try:
+                    connection.execute("INSERT INTO texts VALUES (?)", (digest,))
+                except sqlite3.IntegrityError:
+                    duplicate_text_count += 1
+            if len(errors) > 1000:
+                raise ValueError("too many corpus integrity errors; first: " + "; ".join(errors[:5]))
+        connection.close()
+    return {"records": sum(counts.values()), "words": words, "countries": dict(counts),
+            "country_year_counts": dict(sorted(years.items())), "duplicate_speech_ids": duplicate_ids[:20],
+            "duplicate_speech_id_count": len(duplicate_ids),
+            "duplicate_text_count": duplicate_text_count, "errors": errors, "valid": not errors and not duplicate_ids}
+
+
+def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Stream complete corpus integrity audit")
+    parser.add_argument("corpus", type=Path)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    result = audit_corpus_file(args.corpus)
+    encoded = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(encoded, encoding="utf-8")
+    print(encoded)
+    if not result["valid"]:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

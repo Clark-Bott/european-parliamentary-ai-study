@@ -1,0 +1,18 @@
+{
+  "country": "France",
+  "output": "data/processed/france_speeches.jsonl",
+  "sha256": "668b1dc6833c76a66e9be1abcd0cb28d19ff23ffa3a88e0d50c84b1ab2ae0578",
+  "bytes": 1829346774,
+  "retrieval_date": "2026-09-24",
+  "records": 1243606,
+  "source_words": 75392623,
+  "eligible_min_words": 40,
+  "eligible_records": 393565,
+  "eligible_words": 66401901,
+  "billable_units_100_words": 847941,
+  "list_price_usd_at_0_05_per_unit": 42397.05,
+  "duplicate_speech_ids": 0,
+  "duplicate_text_hashes_all_lengths": 389687,
+  "duplicate_exact_texts_40plus": 175,
+  "note": "Source archives and corpus Git-ignored; 2018–2026 French paragraph interventions only; broad boundary and rights review not complete."
+}

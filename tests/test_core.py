@@ -12,6 +12,7 @@ from parliament_ai_study.io import iter_jsonl, write_jsonl
 from parliament_ai_study.models import Speech, word_count
 from parliament_ai_study.pangram import PangramClient, ResponseCache, request_fingerprint
 from parliament_ai_study.pipeline import run_pipeline
+from parliament_ai_study.qa import audit_corpus_file
 from parliament_ai_study.sampling import sample_historical_controls
 from parliament_ai_study.sources.build import build_six_country_corpus
 
@@ -39,6 +40,19 @@ class SpeechSchemaTests(unittest.TestCase):
 
 
 class JsonLinesTests(unittest.TestCase):
+    def test_disk_backed_audit_reports_duplicate_text_and_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rows.jsonl"
+            write_jsonl(path, [{"country": "France", "date": "2024-01-01", "speech_id": "a",
+                                "speech_text": "Bonjour", "word_count": 1, "source_url": "https://example.test/a",
+                                "source_identifier": "a"},
+                               {"country": "France", "date": "2024-01-01", "speech_id": "b",
+                                "speech_text": "Bonjour", "word_count": 1, "source_url": "https://example.test/b",
+                                "source_identifier": "b"}])
+            report = audit_corpus_file(path)
+            self.assertTrue(report["valid"])
+            self.assertEqual(report["duplicate_text_count"], 1)
+
     def test_stream_reader_round_trips_json_records(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "rows.jsonl"
@@ -76,6 +90,15 @@ class CostTests(unittest.TestCase):
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_window_counts_use_detector_denominator_after_text_normalization(self):
+        rows = [{"country": "Poland", "date": "2025-01-01", "word_count": 100, "speech_id": "p"}]
+        results = {"p": {"fraction_ai": 0.0, "fraction_ai_assisted": 0.0,
+                          "windows": [{"label": "AI-Generated", "word_count": 30},
+                                      {"label": "Human Written", "word_count": 80}]}}
+        summary = aggregate_results(rows, results)[0]
+        self.assertAlmostEqual(summary["ai_word_share"], 30 / 110)
+        self.assertAlmostEqual(summary["ai_words_estimate"], 100 * 30 / 110)
+
     def test_aggregates_ai_and_mixed_word_shares_by_period(self):
         speeches = [
             {"country": "France", "date": "2024-02-01", "word_count": 100, "speech_id": "a"},
@@ -336,7 +359,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(len(summary["countries"]), 6)
             for relative in (
                 "tables/corpus_size.csv", "tables/annual_results.csv",
-                "tables/cost_estimate.csv", "figures/all_countries.svg",
+                "tables/cost_estimate.csv", "tables/sensitivity.csv", "figures/all_countries.svg",
                 "reports/dry_run_report.md", "processed/mock_results.jsonl",
             ):
                 self.assertTrue((Path(directory) / relative).is_file(), relative)

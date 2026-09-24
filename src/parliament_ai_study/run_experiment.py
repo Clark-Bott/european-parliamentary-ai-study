@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 from .cost import estimate_cost
-from .io import read_jsonl
+from .io import iter_jsonl
 from .pipeline import run_pipeline
 from .sources.build import build_six_country_corpus
 
@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.estimate_only:
         if not args.corpus.is_file():
             raise SystemExit(f"corpus not found: {args.corpus}")
-        report = estimate_cost(read_jsonl(args.corpus), price_per_1000_words=price,
+        report = estimate_cost(iter_jsonl(args.corpus), price_per_1000_words=price,
                                country=args.country, years=set(args.year) if args.year else None,
                                period=args.period)
         print(f"country\tspeeches\twords\tAPI units\testimated cost (USD)")

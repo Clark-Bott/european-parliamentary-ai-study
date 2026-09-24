@@ -85,7 +85,7 @@ def parse_bundestag_xml(data: bytes | str, *, source_url: str) -> list[Speech]:
         output.append(Speech(country="Germany", parliament="Bundestag", chamber="Bundestag",
                              date=date_value, session_id=session, speech_id=speech_id,
                              speaker_id=speaker.attrib.get("id", ""), speaker_name=full_name,
-                             party=name.findtext("fraktion", ""), speaker_role=name.findtext("rolle", ""),
+                             party=name.findtext("fraktion", ""), speaker_role=name.findtext("rolle/rolle_lang", ""),
                              legislative_term=term, speech_text=clean, raw_text=raw,
                              source_url=source_url + "#" + rede.attrib["id"], source_identifier=rede.attrib["id"],
                              source_type="official_bundestag_xml", text_language="de",

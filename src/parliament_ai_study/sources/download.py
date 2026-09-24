@@ -75,6 +75,27 @@ def download_file(url: str, destination: str | Path, *, manifest_path: str | Pat
     last_error: Exception | None = None
     metadata: dict[str, Any] = {}
 
+    def stream_full(response) -> None:
+        nonlocal metadata
+        if response.status != 200:
+            raise IncompleteRead(b"", 1)
+        metadata = {"status": response.status,
+                    "content_type": response.headers.get("Content-Type", "")}
+        expected = response.headers.get("Content-Length")
+        written = 0
+        with temp.open("wb") as stream:
+            while True:
+                chunk = response.read(chunk_size)
+                if not chunk:
+                    break
+                stream.write(chunk)
+                written += len(chunk)
+        if expected is not None and written != int(expected):
+            raise IncompleteRead(b"", int(expected) - written)
+        if written == 0:
+            raise IncompleteRead(b"", 1)
+        os.replace(temp, target)
+
     def fetch_range(start: int, end: int, total: int) -> dict[str, Any]:
         range_error: Exception | None = None
         for chunk_attempt in range(retries):
@@ -83,7 +104,7 @@ def download_file(url: str, destination: str | Path, *, manifest_path: str | Pat
                 with opener(Request(url, headers=range_headers), timeout=timeout) as response:
                     info = _parse_content_range(response.headers.get("Content-Range"))
                     if response.status != 206 or info != (start, end, total):
-                        raise ValueError("server returned an unexpected byte range")
+                        raise IncompleteRead(b"", end - start + 1)
                     chunk_meta = {"status": response.status,
                                   "content_type": response.headers.get("Content-Type", "")}
                     written = 0
@@ -120,21 +141,17 @@ def download_file(url: str, destination: str | Path, *, manifest_path: str | Pat
                 if response.status == 206 and info is not None and info[0] == 0:
                     total = info[2]
                 elif response.status == 200:
-                    expected = response.headers.get("Content-Length")
-                    written = 0
-                    with temp.open("wb") as stream:
-                        while True:
-                            chunk = response.read(chunk_size)
-                            if not chunk:
-                                break
-                            stream.write(chunk)
-                            written += len(chunk)
-                    if expected is not None and written != int(expected):
-                        raise IncompleteRead(b"", int(expected) - written)
-                    os.replace(temp, target)
+                    stream_full(response)
+                    break
+                elif response.status == 206 and response.headers.get("Content-Range", "").endswith("/*"):
+                    # Some official/CDN endpoints respond to a range probe
+                    # with bytes 0-0/* even though a plain GET is complete.
+                    # Do not treat one probed byte as an entire download.
+                    with opener(Request(url, headers=request_headers), timeout=timeout) as full_response:
+                        stream_full(full_response)
                     break
                 else:
-                    raise ValueError(f"unexpected HTTP status for download: {response.status}")
+                    raise IncompleteRead(b"", 1)
             offset = 0
             while offset < total:
                 end = min(offset + range_chunk_size - 1, total - 1)

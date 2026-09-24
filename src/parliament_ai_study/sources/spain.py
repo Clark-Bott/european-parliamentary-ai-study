@@ -16,7 +16,7 @@ from .download import download_file, fetch_bytes
 
 BASE = "https://www.congreso.es"
 _TURN = re.compile(r"^[ \t]*(?:La señora|El señor)\s+([A-ZÁÉÍÓÚÜÑÀÈÌÒÙÇ][^:\n]{1,105}):\s*", re.M)
-_STAGE = re.compile(r"\((?:Aplausos|Rumores|Risas|Protestas|Pausa)[^()]*\)", re.I)
+_STAGE = re.compile(r"\((?:(?:Continúan|Se producen) los? )?(?:Aplausos|Rumores|Risas|Protestas|Pausa)[^()]*\)", re.I)
 
 
 def journal_url(term: int, number: int) -> str:

@@ -33,7 +33,8 @@ def _speaker_header(item: str, speaker: ET.Element) -> bool:
     return any(candidate and candidate.casefold() in lowered for candidate in candidates)
 
 
-def parse_tweede_kamer_xml(xml_data: str | bytes | ET.Element, *, source_url: str) -> list[Speech]:
+def parse_tweede_kamer_xml(xml_data: str | bytes | ET.Element, *, source_url: str,
+                           record_status: str = "") -> list[Speech]:
     """Parse attributed speaker turns from one official VLOS `Verslag` XML document."""
     root = xml_data if isinstance(xml_data, ET.Element) else ET.fromstring(xml_data)
     meeting = next((e for e in root.iter() if _name(e.tag) == "vergadering"), None)
@@ -78,6 +79,7 @@ def parse_tweede_kamer_xml(xml_data: str | bytes | ET.Element, *, source_url: st
             party=_child_text(speaker, "fractie"), speaker_role=role, legislative_term=term,
             speech_text=speech_text, raw_text=raw_text, source_url=source_url,
             source_identifier=speech_id, source_type="official_vlos_xml", text_language="nl",
+            record_status=record_status,
             cleaning_notes="Removed the source XML speaker-label prefix from speech_text; raw_text retains it."
             if raw_text != speech_text else ""))
     return output
@@ -94,12 +96,13 @@ def _odata_pages(url: str) -> Iterator[dict[str, Any]]:
 
 def _corrected_final_report(meeting_id: str) -> dict[str, Any] | None:
     expression = (f"Vergadering_Id eq {meeting_id} and Verwijderd eq false and "
-                  "Soort eq 'Eindpublicatie' and (Status eq 'Gecorrigeerd' or Status eq 'Gerectificeerd')")
+                  "Soort eq 'Eindpublicatie'")
     url = ODATA + "/Verslag?" + urlencode({"$filter": expression, "$orderby": "GewijzigdOp desc", "$top": "20"})
     versions = list(_odata_pages(url))
     if not versions:
         return None
-    versions.sort(key=lambda row: (row.get("GewijzigdOp", ""), row.get("Status", "")), reverse=True)
+    versions.sort(key=lambda row: (row.get("Status") in ("Gecorrigeerd", "Gerectificeerd"),
+                                   row.get("GewijzigdOp", "")), reverse=True)
     return versions[0]
 
 
@@ -118,19 +121,24 @@ def iter_tweede_kamer_speeches(*, start_year: int = 2018, end_year: int = 2026,
     """Iterate plenary turns with a corrected final report when available."""
     meeting_filter = (
         "Verwijderd eq false and Soort eq 'Plenair' and Kamer eq 'Tweede Kamer' and "
-        f"Datum ge {start_year}-01-01T00:00:00Z and Datum lt {end_year + 1}-01-01T00:00:00Z"
+        f"Datum ge {start_year - 1}-12-31T00:00:00Z and Datum lt {end_year + 1}-01-02T00:00:00Z"
     )
-    meeting_url = ODATA + "/Vergadering?" + urlencode({"$filter": meeting_filter, "$top": "500"})
+    # The server rejects $top > 250. OData dates carry a +01:00/+02:00
+    # offset, so use a padded range and filter parsed local dates below.
+    meeting_url = ODATA + "/Vergadering?" + urlencode({"$filter": meeting_filter, "$top": "250"})
     for meeting in _odata_pages(meeting_url):
+        if not start_year <= int(str(meeting["Datum"])[:4]) <= end_year:
+            continue
         meeting_id = str(meeting["Id"])
         report = _corrected_final_report(meeting_id)
         if report is None:
             continue
         report_path, source_url = _download_report(str(report["Id"]), raw_dir, manifest_path)
         try:
-            yield from parse_tweede_kamer_xml(report_path.read_bytes(), source_url=source_url)
-        except (ET.ParseError, ValueError):
-            continue
+            yield from parse_tweede_kamer_xml(report_path.read_bytes(), source_url=source_url,
+                                              record_status=str(report.get("Status", "")))
+        except (ET.ParseError, ValueError) as exc:
+            raise ValueError(f"cannot parse Tweede Kamer report {source_url}") from exc
 
 
 def build_tweede_kamer_corpus(output_path: str | Path, *, start_year: int = 2018,

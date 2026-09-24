@@ -58,6 +58,8 @@ def parse_france_xml(xml_data: str | bytes | ET.Element, *, source_url: str) -> 
         party_match = _PARTY.search(full_name)
         party = party_match.group(1).strip() if party_match else ""
         speaker_name = _PARTY.sub("", full_name).strip()
+        if re.search(r"\b(?:le président|la présidente)\b", speaker_name, re.I):
+            role = "presiding_officer"
         raw_text = " ".join("".join(text_element.itertext()).split())
         cleaned = _STAGE.sub(" ", raw_text)
         cleaned = " ".join(cleaned.split())
@@ -91,8 +93,8 @@ def parse_france_archive(path: str | Path, *, start_year: int = 2018,
                 if source_date.year < start_year or source_date.year > end_year:
                     continue
                 parsed = parse_france_xml(root, source_url=provenance)
-            except (ET.ParseError, ValueError):
-                continue
+            except (ET.ParseError, ValueError) as exc:
+                raise ValueError(f"cannot parse Assemblée source {archive_path}:{name}") from exc
             yield from parsed
 
 

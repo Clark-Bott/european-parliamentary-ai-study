@@ -39,9 +39,11 @@ def aggregate_results(
         if words < min_words:
             continue
         role = str(get("speaker_role", "")).casefold()
+        name = str(get("speaker_name", "")).casefold()
         if exclude_ministers and "minister" in role:
             continue
-        if exclude_chairs and any(term in role for term in ("chair", "president", "speaker", "presiding")):
+        if exclude_chairs and (any(term in role for term in ("chair", "president", "speaker", "presiding", "voorzitter", "marszał"))
+                               or any(term in name for term in ("le président", "la présidente", "presidenta", "presidente de la mesa"))):
             continue
         speech_id = str(get("speech_id", ""))
         if speech_id not in responses:
@@ -55,7 +57,7 @@ def aggregate_results(
         mixed_words = words * mixed
         windows = response.get("windows")
         if isinstance(windows, list) and windows:
-            ai_words = mixed_words = 0
+            window_ai = window_mixed = 0
             classified_words = 0
             for window in windows:
                 label = str(window.get("label", "")).casefold().replace("_", "-")
@@ -64,13 +66,17 @@ def aggregate_results(
                     raise ValueError(f"negative window word count for {speech_id}")
                 classified_words += count
                 if label in {"ai-generated", "ai-written", "ai"}:
-                    ai_words += count
+                    window_ai += count
                 elif label in {"ai-assisted", "mixed", "ai-assisted / mixed"}:
-                    mixed_words += count
-            if classified_words > words:
-                raise ValueError(f"Pangram window words exceed corpus word count for {speech_id}")
-            ai = ai_words / words if words else 0.0
-            mixed = mixed_words / words if words else 0.0
+                    window_mixed += count
+            if classified_words:
+                # Pangram 4 can normalize the submitted text. Its window word
+                # count need not equal our Unicode tokenizer's word count.
+                # Scale window proportions to the common source denominator.
+                ai = window_ai / classified_words
+                mixed = window_mixed / classified_words
+                ai_words = words * ai
+                mixed_words = words * mixed
         day = date.fromisoformat(str(get("date")))
         key = (str(get("country")), _period(day, period))
         group = groups[key]

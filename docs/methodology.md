@@ -8,11 +8,11 @@ The target population is substantive interventions entered into the plenary reco
 
 Primary estimand, conditional on a configured minimum eligible length, is the fraction of all eligible words classified AI-generated:
 
-`AI-only word share = sum(Pangram window word_count where label == AI-Generated) / sum(eligible source word_count)`
+`AI-only word share = sum(source words per speech × Pangram AI-window words / all Pangram window words) / sum(eligible source words)`
 
-If a response lacks segment word counts, the current implementation estimates the numerator as source word_count × Pangram `fraction_ai`; report that as a fallback approximation, not an exact word count.
+Pangram 4 may normalize submitted text. Therefore, the detector's window word total can differ from this repository's Unicode source-word total. The code scales window fractions to each speech's source denominator; these are *estimated* AI-classified source words, not exact matching word boundaries. If no usable window counts exist, the code uses source word_count × Pangram `fraction_ai` as a fallback approximation.
 
-AI-assisted/mixed fraction is reported separately and also in a clearly labeled combined sensitivity estimate. Pangram's current official API documentation confirms an asynchronous task flow: POST `/task` returns a task ID; polling GET `/task/{task_id}` continues until `STAGE_SUCCESS` or `STAGE_FAILED`. The successful response includes `fraction_ai`, `fraction_ai_assisted`, `fraction_human`, and (on Pangram 4) windows with labels and `word_count` values. It also states Pangram 4 may normalize submitted text, so window offsets refer to the returned text.[2] The client submits one intervention per task and sends an explicit model selector. Our primary word estimate sums Pangram's `word_count` for `AI-Generated` windows; assisted words are tabulated separately. For older/alternate responses without windows, the pipeline uses the returned fractions times the source corpus word count, which is an approximation and is recorded as a limitation.
+AI-assisted/mixed fraction is reported separately and also in a labeled combined sensitivity estimate. Pangram's API specifies an asynchronous task flow: POST `/task` returns a task ID; polling GET `/task/{task_id}` continues until `STAGE_SUCCESS` or `STAGE_FAILED`. The result includes `fraction_ai`, `fraction_ai_assisted`, `fraction_human`, and Pangram 4 windows with labels and `word_count`. Window offsets refer to Pangram's returned (possibly normalized) text.[2] The client submits one intervention per task, checks `/models` entitlement, and sends an explicit selector.
 
 ## Time periods and controls
 
@@ -28,7 +28,7 @@ Aggregate by country and month, quarter, and year. Provide word-weighted and int
 
 ## Pangram use and cost
 
-The current documented API is asynchronous (`POST /task`, then poll `GET /task/{task_id}`); current docs instruct new integrations to specify a model selector, and show `pangram-4` as an example.[2] Developer pricing currently lists Pangram 4 at $0.05 per 100 words and Pangram 3 at $0.05 per 1,000 words, with a Bulk API discount shown.[3] Pricing is mutable and estimates must be generated from the current configured model/rate, with a clear warning that the billing unit, text normalization, task billing, taxes, discounts, and account-specific terms must be reconfirmed before paid submission. No paid call is part of this work.
+The documented API is asynchronous (`POST /task`, then poll `GET /task/{task_id}`); new integrations must specify a model selector, and `GET /models` reports key-specific access.[2] Developer pricing lists Pangram 4 at $0.05 per **started 100-word block for each submitted item** and Pangram 3 at a different unit/rate. `estimate_cost` uses `ceil(speech_words/100)` for Pangram 4's default configuration; the task client does not claim a bulk discount.[3] Billing and account-specific terms must be reconfirmed before paid submission. No paid call is part of this work.
 
 ## Sources
 
