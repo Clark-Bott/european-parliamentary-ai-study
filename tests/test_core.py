@@ -20,6 +20,11 @@ from parliament_ai_study.positive_controls import (
 )
 from parliament_ai_study.provenance import reconcile_source_manifest
 from parliament_ai_study.qa import audit_corpus_file
+from parliament_ai_study.review import (
+    containment_status,
+    normalize,
+    sample_records,
+)
 from parliament_ai_study.sampling import sample_historical_controls
 from parliament_ai_study.sources.build import build_six_country_corpus
 
@@ -618,6 +623,46 @@ class PositiveControlTests(unittest.TestCase):
             self.assertTrue(summary["positive_controls"]["prepared"])
             self.assertTrue((base / "out/tables/positive_controls.csv").is_file())
             self.assertTrue((base / "out/reports/positive_controls.json").is_file())
+
+
+class SourceBoundaryReviewTests(unittest.TestCase):
+    def test_normalize_handles_punctuation_spacing_from_inline_markup(self):
+        self.assertEqual(normalize("De  voorzitter : Geen steun."),
+                         normalize("De voorzitter: Geen steun."))
+
+    def test_containment_statuses_distinguish_cleaning_from_boundary_errors(self):
+        source = ("La señora presidenta: señorías, por favor, guarden silencio. "
+                  "(rumores). respeten a quien tiene la palabra y que los "
+                  "diputados guarden el orden.")
+        # The parser removes the inline "(rumores)" cue, so strict containment
+        # fails even though every segment of the record is present.
+        record = ("señorías, por favor, guarden silencio. respeten a quien "
+                  "tiene la palabra y que los diputados guarden el orden.")
+        self.assertEqual(containment_status("guarden silencio.", source), "verified")
+        self.assertEqual(containment_status(record, source), "partial")
+        self.assertEqual(containment_status("Je n’ai pas souvenir.", "Je n'ai pas souvenir."),
+                         "normalized")
+        self.assertEqual(containment_status(
+            "una frase que no aparece en ninguna parte de la fuente oficial",
+            source), "mismatch")
+
+    def test_sampling_is_deterministic_balanced_and_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "c.jsonl"
+            rows = []
+            for year in (2018, 2021, 2024):
+                for index in range(8):
+                    rows.append({"country": "Germany", "date": f"{year}-05-{index + 1:02d}",
+                                 "speech_id": f"de-{year}-{index}", "speech_text": "x" * 90,
+                                 "word_count": 90})
+            write_jsonl(corpus, rows)
+            first = sample_records(corpus, "Germany", 6, 2026)
+            second = sample_records(corpus, "Germany", 6, 2026)
+            self.assertEqual([row["speech_id"] for row in first],
+                             [row["speech_id"] for row in second])
+            self.assertEqual(len(first), 6)
+            self.assertEqual({row["date"][:4] for row in first}, {"2018", "2021", "2024"})
+            self.assertEqual(sample_records(corpus, "France", 5, 2026), [])
 
 
 if __name__ == "__main__":

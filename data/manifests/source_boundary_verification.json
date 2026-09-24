@@ -1,0 +1,71 @@
+{
+  "method": "parliament_ai_study.review --verify (deterministic seed 2026 sample, containment of normalized speech_text in the record's own official source)",
+  "statuses": {
+    "verified": "record text found verbatim after whitespace/case folding",
+    "normalized": "found after ignoring punctuation spacing, decorative characters, and apostrophe style",
+    "partial": "every substantial segment found; inline material removed by cleaning (audience cues, page markers) accounts for the difference",
+    "mismatch": "record text not located in the source; requires manual investigation",
+    "skipped": "source not retrievable by this tool"
+  },
+  "limitation": "10 records per country is a screening sample, not a completed manual audit. A human must still read sampled records against the official page.",
+  "countries": {
+    "France": {
+      "sampled": 10,
+      "seed": 2026,
+      "status_counts": {
+        "normalized": 4,
+        "verified": 6
+      },
+      "transport": [
+        "local-archive"
+      ],
+      "unresolved": []
+    },
+    "Germany": {
+      "sampled": 10,
+      "seed": 2026,
+      "status_counts": {
+        "verified": 10
+      },
+      "transport": [
+        "local-archive"
+      ],
+      "unresolved": []
+    },
+    "Italy": {
+      "sampled": 10,
+      "seed": 2026,
+      "status_counts": {
+        "normalized": 4,
+        "verified": 6
+      },
+      "transport": [
+        "http"
+      ],
+      "unresolved": []
+    },
+    "Netherlands": {
+      "sampled": 10,
+      "seed": 2026,
+      "status_counts": {
+        "verified": 10
+      },
+      "transport": [
+        "http"
+      ],
+      "unresolved": []
+    },
+    "Spain": {
+      "sampled": 10,
+      "seed": 2026,
+      "status_counts": {
+        "verified": 7,
+        "partial": 3
+      },
+      "transport": [
+        "http"
+      ],
+      "unresolved": []
+    }
+  }
+}

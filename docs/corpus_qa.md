@@ -51,7 +51,7 @@ For one 16th-legislature example, the normalized record `CRSANR5L16S2024O1N109:3
 
 ## Not yet complete
 
-- A reproducible random sample review with multiple sessions and speakers.
+- A reproducible random sample review with multiple sessions and speakers. Automated source-boundary screening for France (10 records, 0 mismatches) is recorded in [source_boundary_verification.md](source_boundary_verification.md); the human reading of a larger sample remains open.
 - A systematic check of cleaning boundaries, presidencies, ministerial remarks, short interruptions, and duplicate text.
 - Manual review of the 10,181-word record.
 - A final exact source-license/attribution review for downstream redistribution or Pangram processing.
