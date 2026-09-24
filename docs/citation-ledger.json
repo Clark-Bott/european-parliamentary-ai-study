@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": 1,
+      "url": "https://biztoc.com/x/d5f103685ea36fdb",
+      "title": "Economist story metadata mirror",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 2,
+      "url": "https://docs.pangram.com/api-reference/ai-detection",
+      "title": "Pangram AI Detection API",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 3,
+      "url": "https://www.pangram.com/pricing?category=developers",
+      "title": "Pangram developer pricing",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 4,
+      "url": "https://dip.bundestag.de/%C3%BCber-dip/hilfe/api",
+      "title": "Bundestag DIP API help",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 5,
+      "url": "https://search.dip.bundestag.de/api/v1/openapi.yaml",
+      "title": "Bundestag DIP OpenAPI",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 6,
+      "url": "https://data.assemblee-nationale.fr/travaux-parlementaires/debats",
+      "title": "French Assembly debates data",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 7,
+      "url": "https://data.assemblee-nationale.fr/travaux-parlementaires/seance-publique",
+      "title": "French Assembly plenary data",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 8,
+      "url": "https://data.assemblee-nationale.fr/licence-ouverte-open-licence",
+      "title": "French Assembly open licence",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 9,
+      "url": "https://opendata.tweedekamer.nl/documentatie/verslag",
+      "title": "Tweede Kamer Verslag documentation",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 10,
+      "url": "https://opendata.tweedekamer.nl/documentatie/odata-api",
+      "title": "Tweede Kamer OData documentation",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 11,
+      "url": "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/$metadata",
+      "title": "Tweede Kamer OData metadata",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 12,
+      "url": "https://dati.camera.it",
+      "title": "Camera open-data portal",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 13,
+      "url": "https://www.congreso.es/datos-abiertos",
+      "title": "Spanish Congress open data",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 14,
+      "url": "https://www.congreso.es/es/opendata/intervenciones",
+      "title": "Spanish Congress interventions",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 15,
+      "url": "https://api.sejm.gov.pl",
+      "title": "Sejm API documentation",
+      "accessed": "2026-09-24"
+    },
+    {
+      "id": 16,
+      "url": "https://api.sejm.gov.pl/sejm.html",
+      "title": "Sejm API reference",
+      "accessed": "2026-09-24"
+    }
+  ]
+}
