@@ -38,8 +38,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--country", help="optional country filter for --estimate-only")
     parser.add_argument("--year", type=int, action="append", help="optional year filter (repeatable) for --estimate-only")
     parser.add_argument("--period", choices=("historical", "post_chatgpt"), help="optional period filter for --estimate-only")
-    parser.add_argument("--gap-report", type=Path, default=Path("data/manifests/spain_unavailable_journals.json"),
-                        help="recorded official source gaps that must be empty before paid inference")
+    parser.add_argument("--gap-report", type=Path, action="append",
+                        default=[Path("data/manifests/spain_unavailable_journals.json"),
+                                 Path("data/manifests/germany_unavailable_protocols.json")],
+                        help="recorded official source gaps that must be empty before paid inference; repeatable")
     return parser
 
 
@@ -75,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
                            price_per_1000_words=price, model=model,
                            confirm_paid_run=args.confirm_paid_run,
                            api_key=os.environ.get("PANGRAM_API_KEY"),
-                           gap_report=args.gap_report)
+                           gap_reports=args.gap_report)
     print(f"Pipeline complete: {summary['results_dir']}")
     mode = "synthetic smoke test" if summary["synthetic_smoke_test"] else (
         "real corpus / MOCKED detector responses" if summary["mocked"] else "Pangram inference")

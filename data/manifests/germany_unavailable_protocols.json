@@ -1,0 +1,9 @@
+[
+  {
+    "country": "Germany",
+    "after": "2026-01-17",
+    "through": 2026,
+    "reason": "official XML supplement unavailable",
+    "error": "HTTPError: HTTP Error 400: Bad Request"
+  }
+]

@@ -348,7 +348,7 @@ class PipelineTests(unittest.TestCase):
                 run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
                              confirm_paid_run=True, api_key="fake-key", model="pangram-4",
                              price_per_1000_words=0.5,
-                             gap_report=base / "missing-gaps.json")
+                             gap_reports=base / "missing-gaps.json")
             self.assertFalse((base / "out/raw_pangram").exists())
 
     def test_paid_mode_rejects_recorded_source_gaps_after_coverage_check(self):
@@ -364,10 +364,10 @@ class PipelineTests(unittest.TestCase):
             write_jsonl(corpus, records)
             gaps = base / "gaps.json"
             write_jsonl(gaps, [{"term": 12, "number": 162}])
-            with self.assertRaisesRegex(ValueError, "unresolved official journal gaps"):
+            with self.assertRaisesRegex(ValueError, "unresolved official source gaps"):
                 run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
                              confirm_paid_run=True, api_key="fake-key", model="pangram-4",
-                             price_per_1000_words=0.5, gap_report=gaps)
+                             price_per_1000_words=0.5, gap_reports=gaps)
             self.assertFalse((base / "out/raw_pangram").exists())
 
     def test_mock_dry_run_creates_outputs_for_all_six_countries(self):

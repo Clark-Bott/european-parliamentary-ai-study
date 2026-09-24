@@ -212,6 +212,7 @@ class BundestagParserTests(unittest.TestCase):
             self.assertEqual(stats["official_xml_status"], "unavailable")
             self.assertEqual(stats["records"], 1)
             self.assertIn("blocked", stats["official_xml_error"])
+            self.assertIn("blocked", (root / "germany_unavailable_protocols.json").read_text())
 
     def test_cpp_bt_archive_normalizes_speech_metadata_and_skips_empty_text(self):
         fixture = Path(__file__).parent / "fixtures" / CPP_BT_MEMBER

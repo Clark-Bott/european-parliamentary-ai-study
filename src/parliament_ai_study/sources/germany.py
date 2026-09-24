@@ -5,6 +5,7 @@ from collections.abc import Iterator
 import csv
 from datetime import datetime
 import hashlib
+import json
 from html.parser import HTMLParser
 import io
 from pathlib import Path
@@ -200,6 +201,12 @@ def build_bundestag_corpus(output_path: str | Path, *, start_year: int = 2018, e
         # The CC0 baseline is required. Official XML is an optional supplement
         # for the period after the archive cutoff; resource verification must
         # not invalidate the verified historical baseline.
+        gap_path = Path(manifest_path).parent / "germany_unavailable_protocols.json"
+        gap_path.parent.mkdir(parents=True, exist_ok=True)
+        if end_year <= 2025:
+            gap_path.write_text("[]\n", encoding="utf-8")
+            counts["official_xml_status"] = "not_required"
+            return
         try:
             for term in LIST_IDS:
                 for url in list_protocols(term):
@@ -219,9 +226,15 @@ def build_bundestag_corpus(output_path: str | Path, *, start_year: int = 2018, e
                         counts["official_xml_records"] += 1
                         yield speech.to_dict()
             counts["official_xml_status"] = "complete"
+            gap_path.write_text("[]\n", encoding="utf-8")
         except Exception as exc:
             counts["official_xml_status"] = "unavailable"
             counts["official_xml_error"] = f"{type(exc).__name__}: {exc}"
+            gap_path.write_text(json.dumps([{
+                "country": "Germany", "after": CPP_BT_CUTOFF, "through": end_year,
+                "reason": "official XML supplement unavailable",
+                "error": counts["official_xml_error"],
+            }], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(f"WARNING: CPP-BT baseline retained; official XML supplement unavailable: {exc}", flush=True)
 
     write_jsonl(output_path, rows())
