@@ -1,0 +1,22 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Parliamentary source archives and derived corpora: verify reuse terms first.
+data/raw/**
+!data/raw/.gitkeep
+data/interim/**
+!data/interim/.gitkeep
+data/processed/**
+!data/processed/.gitkeep
+
+# Per-text results can contain copyrighted transcript text returned by the API.
+results/raw_pangram/**
+results/processed/**
+results/tables/**
+results/figures/**
+results/reports/**
+!results/**/.gitkeep
