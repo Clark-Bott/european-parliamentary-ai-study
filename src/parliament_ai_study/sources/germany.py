@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 import csv
 from datetime import datetime
+import hashlib
 from html.parser import HTMLParser
 import io
 from pathlib import Path
@@ -25,6 +26,7 @@ CPP_BT_URL = ("https://zenodo.org/api/records/18177196/files/"
 CPP_BT_MEMBER = "CPP-BT_2026-01-17_DE_CSV_Reden_Gesamt.csv"
 CPP_BT_MD5 = "9b03325c65c6930bc5e44d4206ce3d42"
 CPP_BT_DOI = "10.5281/zenodo.18177196"
+CPP_BT_CUTOFF = "2026-01-17"
 LIST_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Referer": f"{BASE}/services/opendata",
@@ -75,6 +77,20 @@ def list_protocols(term: int) -> list[str]:
 
 def _none_or_value(value: object) -> str:
     return "" if value in (None, "NA", "") else str(value)
+
+
+def _ensure_cpp_bt_archive(raw_dir: str | Path, manifest_path: str | Path) -> Path:
+    """Download and verify the versioned CC0 CPP-BT speech archive when absent."""
+    archive = Path(raw_dir) / "germany" / "cpp-bt" / CPP_BT_ARCHIVE
+    if not archive.is_file():
+        download_file(CPP_BT_URL, archive, manifest_path=manifest_path, retries=3)
+    digest = hashlib.md5()
+    with archive.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != CPP_BT_MD5:
+        raise ValueError(f"CPP-BT archive MD5 mismatch: {archive}")
+    return archive
 
 
 def iter_cpp_bt_speeches(archive: str | Path, *, start_year: int = 2018,
@@ -167,35 +183,46 @@ def parse_bundestag_xml(data: bytes | str, *, source_url: str) -> list[Speech]:
 
 def build_bundestag_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                            raw_dir: str | Path = "data/raw",
-                           manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int]:
-    counts = {"records": 0, "words": 0, "protocols": 0,
-              "cpp_bt_records": 0, "official_xml_records": 0}
+                           manifest_path: str | Path = "data/manifests/source_manifest.jsonl") -> dict[str, int | str]:
+    counts: dict[str, int | str] = {
+        "records": 0, "words": 0, "protocols": 0, "cpp_bt_records": 0,
+        "official_xml_records": 0, "official_xml_status": "not_requested",
+        "official_xml_error": "", "cpp_bt_cutoff": CPP_BT_CUTOFF,
+    }
 
     def rows():
-        archive = Path(raw_dir) / "germany" / "cpp-bt" / CPP_BT_ARCHIVE
+        archive = _ensure_cpp_bt_archive(raw_dir, manifest_path)
         for speech in iter_cpp_bt_speeches(archive, start_year=start_year, end_year=end_year):
             counts["records"] += 1
             counts["words"] += speech.word_count
             counts["cpp_bt_records"] += 1
             yield speech.to_dict()
-        for term in LIST_IDS:
-            for url in list_protocols(term):
-                filename = Path(urlparse(url).path).name
-                path = Path(raw_dir) / "germany" / f"term-{term}" / filename
-                if not path.exists():
-                    download_file(url, path, manifest_path=manifest_path)
-                # The file date, not the listing order or current term, determines inclusion.
-                root = ET.fromstring(path.read_bytes())
-                year = datetime.strptime(root.attrib["sitzung-datum"], "%d.%m.%Y").year
-                if not start_year <= year <= end_year:
-                    continue
-                speeches = parse_bundestag_xml(ET.tostring(root), source_url=url)
-                counts["protocols"] += 1
-                for speech in speeches:
-                    counts["records"] += 1
-                    counts["words"] += speech.word_count
-                    counts["official_xml_records"] += 1
-                    yield speech.to_dict()
+        # The CC0 baseline is required. Official XML is an optional supplement
+        # for the period after the archive cutoff; resource verification must
+        # not invalidate the verified historical baseline.
+        try:
+            for term in LIST_IDS:
+                for url in list_protocols(term):
+                    filename = Path(urlparse(url).path).name
+                    path = Path(raw_dir) / "germany" / f"term-{term}" / filename
+                    if not path.exists():
+                        download_file(url, path, manifest_path=manifest_path)
+                    root = ET.fromstring(path.read_bytes())
+                    day = datetime.strptime(root.attrib["sitzung-datum"], "%d.%m.%Y").date().isoformat()
+                    if not (CPP_BT_CUTOFF < day <= f"{end_year}-12-31"):
+                        continue
+                    speeches = parse_bundestag_xml(ET.tostring(root), source_url=url)
+                    counts["protocols"] += 1
+                    for speech in speeches:
+                        counts["records"] += 1
+                        counts["words"] += speech.word_count
+                        counts["official_xml_records"] += 1
+                        yield speech.to_dict()
+            counts["official_xml_status"] = "complete"
+        except Exception as exc:
+            counts["official_xml_status"] = "unavailable"
+            counts["official_xml_error"] = f"{type(exc).__name__}: {exc}"
+            print(f"WARNING: CPP-BT baseline retained; official XML supplement unavailable: {exc}", flush=True)
 
     write_jsonl(output_path, rows())
     return counts

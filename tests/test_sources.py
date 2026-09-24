@@ -7,8 +7,9 @@ from zipfile import ZipFile
 
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
-from parliament_ai_study.sources.germany import (CPP_BT_MEMBER, iter_cpp_bt_speeches,
-                                               list_protocols, parse_bundestag_xml, _Links)
+from parliament_ai_study.sources.germany import (CPP_BT_MEMBER, build_bundestag_corpus,
+                                               iter_cpp_bt_speeches, list_protocols,
+                                               parse_bundestag_xml, _Links)
 from parliament_ai_study.sources.italy import build_camera_corpus, parse_camera_html, parse_camera_xml
 from parliament_ai_study.sources.netherlands import parse_tweede_kamer_xml, iter_tweede_kamer_speeches, _odata_pages
 from unittest.mock import patch
@@ -195,6 +196,23 @@ class ManifestTests(unittest.TestCase):
 
 
 class BundestagParserTests(unittest.TestCase):
+    def test_cpp_bt_baseline_survives_official_xml_source_failure(self):
+        fixture = Path(__file__).parent / "fixtures" / CPP_BT_MEMBER
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "raw" / "germany" / "cpp-bt" / "speeches.zip"
+            archive.parent.mkdir(parents=True)
+            with ZipFile(archive, "w") as bundle:
+                bundle.write(fixture, CPP_BT_MEMBER)
+            with patch("parliament_ai_study.sources.germany._ensure_cpp_bt_archive", return_value=archive), \
+                 patch("parliament_ai_study.sources.germany.list_protocols", side_effect=OSError("blocked")):
+                stats = build_bundestag_corpus(root / "germany.jsonl", raw_dir=root / "raw",
+                                               manifest_path=root / "manifest.jsonl")
+            self.assertEqual(stats["cpp_bt_records"], 1)
+            self.assertEqual(stats["official_xml_status"], "unavailable")
+            self.assertEqual(stats["records"], 1)
+            self.assertIn("blocked", stats["official_xml_error"])
+
     def test_cpp_bt_archive_normalizes_speech_metadata_and_skips_empty_text(self):
         fixture = Path(__file__).parent / "fixtures" / CPP_BT_MEMBER
         with tempfile.TemporaryDirectory() as directory:
