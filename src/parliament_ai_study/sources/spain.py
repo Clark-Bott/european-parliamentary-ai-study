@@ -7,9 +7,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from html.parser import HTMLParser
+from io import BytesIO
 from pathlib import Path
 import json
 import re
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from ..io import write_jsonl
 from ..models import Speech
@@ -114,9 +117,57 @@ def parse_congreso_html(data: bytes | str, *, source_url: str, term: int, number
     return output
 
 
+def _html_full_text_available(contents: bytes) -> bool:
+    parser = _Journal()
+    parser.feed(contents.decode("utf-8", errors="replace"))
+    return bool(parser.parts and parser.date_parts)
+
+
+def _pdf_journal_available(term: int, number: int) -> bool:
+    url = pdf_journal_url(term, number)
+    request = Request(url, headers={
+        "User-Agent": "Mozilla/5.0", "Referer": f"{BASE}/", "Range": "bytes=0-4",
+    })
+    try:
+        with urlopen(request, timeout=30) as response:
+            content_type = response.headers.get("Content-Type", "").casefold()
+            return (response.status in (200, 206)
+                    and "application/pdf" in content_type
+                    and response.read(5).startswith(b"%PDF"))
+    except (HTTPError, URLError, TimeoutError, OSError):
+        return False
+
+
+def _journal_date(term: int, number: int) -> str | None:
+    body, _ = fetch_bytes(journal_url(term, number))
+    parser = _Journal()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    match = re.search(r"\b\d{2}/\d{2}/\d{4}\b", " ".join(parser.date_parts))
+    if match:
+        return datetime.strptime(match.group(0), "%d/%m/%Y").date().isoformat()
+    try:
+        pdf_body, _ = fetch_bytes(pdf_journal_url(term, number), headers={
+            "User-Agent": "Mozilla/5.0", "Referer": f"{BASE}/",
+        })
+        from pypdf import PdfReader
+        text = "\n".join((PdfReader(BytesIO(pdf_body), strict=False).pages[0].extract_text() or "").splitlines())
+    except (ImportError, ValueError, OSError, IndexError):
+        return None
+    textual = re.search(
+        r"\b(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+        r"septiembre|setiembre|octubre|noviembre|diciembre)\s+de\s+(\d{4})\b", text, re.I)
+    if not textual:
+        return None
+    months = {"enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5,
+              "junio": 6, "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9,
+              "octubre": 10, "noviembre": 11, "diciembre": 12}
+    day, month, year = textual.groups()
+    return datetime(int(year), months[month.casefold()], int(day)).date().isoformat()
+
+
 def _has_journal(term: int, number: int) -> bool:
     body, _ = fetch_bytes(journal_url(term, number))
-    return 'class="textoCompleto"' in body.decode("utf-8", errors="replace")
+    return _html_full_text_available(body) or _pdf_journal_available(term, number)
 
 
 def _last_journal(term: int) -> int:
@@ -171,13 +222,10 @@ def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, en
                 low, high = 1, last + 1
                 while low < high:
                     mid = (low + high) // 2
-                    probe, _ = fetch_bytes(journal_url(term, mid))
-                    probe_parser = _Journal()
-                    probe_parser.feed(probe.decode("utf-8", errors="replace"))
-                    match = re.search(r"\b\d{2}/\d{2}/(\d{4})\b", " ".join(probe_parser.date_parts))
-                    if not match:
+                    probe_date = _journal_date(term, mid)
+                    if probe_date is None:
                         raise ValueError(f"date missing in Congreso journal {term}-{mid}")
-                    if int(match.group(1)) < start_year:
+                    if int(probe_date[:4]) < start_year:
                         low = mid + 1
                     else:
                         high = mid
@@ -189,21 +237,27 @@ def build_congreso_corpus(output_path: str | Path, *, start_year: int = 2018, en
                     download_file(url, path, manifest_path=manifest_path)
                 contents = path.read_bytes()
                 source_url = url
-                if b'class="textoCompleto"' in contents:
-                    speeches = parse_congreso_html(contents, source_url=source_url,
-                                                   term=term, number=number)
-                else:
+                speeches: list[Speech] | None = None
+                if _html_full_text_available(contents):
+                    try:
+                        speeches = parse_congreso_html(contents, source_url=source_url,
+                                                       term=term, number=number)
+                    except ValueError:
+                        speeches = None
+                if not speeches:
                     pdf_path = Path(raw_dir) / "spain" / "pdf-fallback" / f"DSCD-{term}-PL-{number}.PDF"
                     if not pdf_path.exists():
                         download_file(pdf_journal_url(term, number), pdf_path,
                                       manifest_path=manifest_path,
                                       headers={"User-Agent": "Mozilla/5.0", "Referer": f"{BASE}/"})
+                    source_url = pdf_journal_url(term, number)
                     try:
-                        source_url = pdf_journal_url(term, number)
                         speeches = parse_congreso_pdf(pdf_path.read_bytes(), source_url=source_url,
                                                       term=term, number=number)
                         counts["pdf_fallback_journals"] += 1
-                    except Exception as exc:
+                    except RuntimeError:
+                        raise
+                    except (ValueError, OSError) as exc:
                         gaps.append({"term": term, "number": number, "url": source_url,
                                      "reason": "official PDF fallback could not be parsed",
                                      "error": f"{type(exc).__name__}: {exc}"})

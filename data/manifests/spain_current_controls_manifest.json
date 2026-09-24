@@ -1,13 +1,13 @@
 {
   "country": "Spain",
   "output": "data/controls/spain_historical_sample.jsonl",
-  "sha256": "359895cfb5281a287c79368797e077956035839ff1ac398e2b9cf9ebf0099f92",
+  "sha256": "a08bc475847c45d748d4777c47f422f31531494502acb45cbed066947c458ccf",
   "records": 1000,
-  "words": 373350,
+  "words": 372565,
   "seed": 2026,
   "year_counts": {"2018": 250, "2019": 250, "2020": 250, "2021": 250},
   "missing_party_records": 1000,
   "missing_speaker_id_records": 1000,
-  "list_price_usd_at_0_05_per_unit": 210.85,
+  "list_price_usd_at_0_05_per_unit": 210.45,
   "note": "Historical parliamentary sample for detector calibration, not authorship ground truth. Empty IDs use speech IDs in the sampler. No Pangram inference performed; text Git-ignored."
 }

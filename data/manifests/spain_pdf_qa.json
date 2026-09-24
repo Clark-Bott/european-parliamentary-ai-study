@@ -9,8 +9,8 @@
       "pages": 62,
       "pdftotext_words": 45488,
       "parsed_turns": 252,
-      "parsed_words": 24091,
-      "output_sha256": "1a734f953deebd4732b58a70ec6bfaac51ab181fdb06337026f3fce521fe84b0",
+      "parsed_words": 39537,
+      "output_sha256": "b743064ea5ab6ab8d27419af01ed4a235a559c34fbfcab35da7d914461f6dd69",
       "independent_candidate_count": 252,
       "notes": "pdfminer.six and Poppler produced the same 252 speaker-label candidates. Text cleanup remains subject to manual boundary review."
     },
@@ -21,8 +21,8 @@
       "pages": 78,
       "pdftotext_words": 61375,
       "parsed_turns": 148,
-      "parsed_words": 21146,
-      "output_sha256": "29bf6aa3ce74514897973f6b678b59312973b1e37ec4c1bab46e642b577a673e",
+      "parsed_words": 53545,
+      "output_sha256": "994388ef848205b9a5f2668a53e787f46c5584e32bd608695f3a9b81821b9f62",
       "independent_candidate_count": 148,
       "notes": "pdfminer.six and Poppler produced the same 148 speaker-label candidates. Text cleanup remains subject to manual boundary review."
     }
@@ -33,6 +33,11 @@
     "stage_cues_removed_from_speech_text": true,
     "raw_text_retains_stage_cues": true,
     "no_empty_turns": true,
-    "manual_random_boundary_review_complete": false
+    "manual_random_boundary_review_complete": false,
+    "page_boundary_regression": "synthetic header-between-label-and-continuation test",
+    "page_boundary_excerpts_checked": [
+      "rompa con los partidos independentistas",
+      "la vacuna o un tratamiento eficaz"
+    ]
   }
 }

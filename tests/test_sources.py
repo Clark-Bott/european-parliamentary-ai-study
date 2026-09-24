@@ -17,7 +17,8 @@ from parliament_ai_study.sources.netherlands import (audit_tweede_kamer_coverage
     _select_final_report)
 from unittest.mock import patch
 from parliament_ai_study.sources.sejm import audit_sejm_raw_coverage, download_sejm_date, parse_sejm_statement
-from parliament_ai_study.sources.spain import parse_congreso_html, journal_url
+from parliament_ai_study.sources.spain import (_has_journal, _html_full_text_available,
+                                             parse_congreso_html, journal_url)
 from parliament_ai_study.sources.spain_pdf import _Chunk, _Line, parse_congreso_pdf
 
 
@@ -67,6 +68,8 @@ class CongresoParserTests(unittest.TestCase):
             line("La señora VICEPRESIDENTA", bold=True, y=700),
             line("DEL GOBIERNO: Buenos días.", bold=True, y=680),
             line("La respuesta continúa.", y=660),
+            line("DIARIO DE SESIONES DEL CONGRESO DE LOS DIPUTADOS", bold=True, y=800),
+            line("La continuación no se pierde.", y=650),
             line("El señor MINISTRO DE SANIDAD: Gracias. (Aplausos).", bold=True, y=640),
             line("DIARIO DE SESIONES DEL CONGRESO", bold=True, y=800),
         ]]
@@ -76,14 +79,34 @@ class CongresoParserTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0].speaker_name, "VICEPRESIDENTA DEL GOBIERNO")
         self.assertEqual(rows[0].speaker_role, "presiding_officer")
+        self.assertIn("La continuación no se pierde", rows[0].speech_text)
         self.assertNotIn("Aplausos", rows[1].speech_text)
         self.assertIn("Aplausos", rows[1].raw_text)
 
-    def test_pdf_fallback_raises_without_two_opening_markers(self):
+    def test_pdf_only_journal_is_detected_when_html_has_no_full_text(self):
+        self.assertFalse(_html_full_text_available(b"<html><body>sin texto</body></html>"))
+        with patch("parliament_ai_study.sources.spain.fetch_bytes", return_value=(b"<html></html>", {})), \
+             patch("parliament_ai_study.sources.spain._pdf_journal_available", return_value=True):
+            self.assertTrue(_has_journal(12, 162))
+
+    def test_pdf_fallback_accepts_one_opening_marker(self):
+        def line(text, *, bold=False, x=82.2, y=500.0):
+            return _Line(1, y, x, text, bold, (_Chunk(0, x, y, text, "Bold" if bold else "Regular", bold),))
+        pages = [[
+            line("Se reanuda la sesión a las nueve.", y=720),
+            line("La señora PRESIDENTA: Hola", bold=True, y=700),
+        ]]
+        with patch("parliament_ai_study.sources.spain_pdf.extract_pdf_lines", return_value=pages):
+            rows = parse_congreso_pdf(b"%PDF-1.4\n", source_url="https://example.test/journal.pdf",
+                                       term=14, number=59, date_value="2020-10-29")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].speaker_name, "PRESIDENTA")
+
+    def test_pdf_fallback_raises_without_an_opening_marker(self):
         line = _Line(1, 500, 82.2, "La señora PRESIDENTA: Hola", True,
                      (_Chunk(0, 82.2, 500, "La señora PRESIDENTA: Hola", "Bold", True),))
         with patch("parliament_ai_study.sources.spain_pdf.extract_pdf_lines", return_value=[[line]]):
-            with self.assertRaisesRegex(ValueError, "opening markers"):
+            with self.assertRaisesRegex(ValueError, "opening marker"):
                 parse_congreso_pdf(b"%PDF-1.4\n", source_url="https://example.test/journal.pdf",
                                    term=14, number=59, date_value="2020-10-29")
 
@@ -95,13 +118,16 @@ class CongresoParserTests(unittest.TestCase):
             import pypdf  # noqa: F401
         except ImportError:
             self.skipTest("pypdf is not installed in the no-project test environment")
-        expected = {(12, 162): 252, (14, 59): 148}
-        for (term, number), count in expected.items():
+        expected = {(12, 162): (252, 39537, "rompa con los partidos independentistas"),
+                    (14, 59): (148, 53545, "la vacuna o un tratamiento eficaz")}
+        for (term, number), (count, words, excerpt) in expected.items():
             path = Path(f"/tmp/opencode/DSCD-{term}-PL-{number}.PDF")
             url = f"https://www.congreso.es/public_oficiales/L{term}/CONG/DS/PL/DSCD-{term}-PL-{number}.PDF"
             first = parse_congreso_pdf(path.read_bytes(), source_url=url, term=term, number=number)
             second = parse_congreso_pdf(path.read_bytes(), source_url=url, term=term, number=number)
             self.assertEqual(len(first), count)
+            self.assertEqual(sum(row.word_count for row in first), words)
+            self.assertTrue(any(excerpt in row.speech_text for row in first))
             self.assertEqual([row.to_dict() for row in first], [row.to_dict() for row in second])
 
 

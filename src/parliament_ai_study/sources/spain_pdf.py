@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
+from importlib.metadata import PackageNotFoundError, version as package_version
 from io import BytesIO
 import re
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 from ..models import Speech
 
 PDF_PARSER_VERSION = "pypdf-6.1.1-coordinate-v1"
+PYPDF_VERSION = "6.1.1"
 _PREFIX = re.compile(r"^\s*(La\s*señora|El\s*señor)\b", re.IGNORECASE)
 _OPENING = re.compile(r"\bSe\s+(?:abre|reanuda)\s+la\s+sesi[oó]n\b", re.IGNORECASE)
 _PAGE_MARK = re.compile(r"^\s*(?:Página|Pag\.)\s*\d*\s*$", re.IGNORECASE)
@@ -20,7 +22,10 @@ _FURNITURE = re.compile(
 )
 _STAGE_START = re.compile(
     r"^\s*(?:(?:Continúan|Se producen) los? )?"
-    r"(?:Aplausos|Rumores|Risas|Protestas|Pausa)",
+    r"(?:Aplausos|Rumores|Risas|Protestas|Pausa|Prolongados aplausos|"
+    r"Varios (?:señores|señoras) diputados|"
+    r"El señor [^)]+ pronuncia palabras|"
+    r"Comienza su intervención)",
     re.IGNORECASE,
 )
 _DATE_TEXT = re.compile(
@@ -90,8 +95,19 @@ def extract_pdf_lines(data: bytes) -> list[list[_Line]]:
         from pypdf import PdfReader
     except ImportError as exc:  # pragma: no cover - exercised by runtime setup
         raise RuntimeError("pypdf==6.1.1 is required for the Spanish PDF fallback") from exc
+    try:
+        installed_version = package_version("pypdf")
+    except PackageNotFoundError as exc:  # pragma: no cover - exercised by runtime setup
+        raise RuntimeError("pypdf==6.1.1 is required for the Spanish PDF fallback") from exc
+    if installed_version != PYPDF_VERSION:
+        raise RuntimeError(
+            f"Spain PDF fallback requires pypdf=={PYPDF_VERSION}, found {installed_version}"
+        )
 
-    reader = PdfReader(BytesIO(data), strict=False)
+    try:
+        reader = PdfReader(BytesIO(data), strict=False)
+    except Exception as exc:
+        raise ValueError("unable to read the Spain PDF fallback") from exc
     pages: list[list[_Line]] = []
     order = 0
     for page_number, page in enumerate(reader.pages, 1):
@@ -130,7 +146,9 @@ def extract_pdf_lines(data: bytes) -> list[list[_Line]]:
 
 
 def _is_heading(line: _Line) -> bool:
-    if not line.bold:
+    if not line.bold or not (55 < line.y < 735):
+        return False
+    if _PAGE_MARK.match(line.text) or _FURNITURE.search(line.text):
         return False
     letters = "".join(character for character in line.text if character.isalpha())
     if not letters:
@@ -170,6 +188,8 @@ def _normalise_body(text: str) -> str:
     text = _remove_stage_directions(text.replace("\u00ad", ""))
     text = " ".join(text.split())
     text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+    text = re.sub(r"([?!])\.+", r"\1", text)
+    text = re.sub(r"\.{2,}", ".", text)
     text = re.sub(r"([¿¡])\s+", r"\1", text)
     return text.strip()
 
@@ -191,13 +211,14 @@ def parse_congreso_pdf(data: bytes, *, source_url: str, term: int, number: int,
     pages = extract_pdf_lines(data)
     lines = [line for page in pages for line in page]
     openings = [index for index, line in enumerate(lines) if _OPENING.search(line.text)]
-    if len(openings) < 2:
-        raise ValueError(f"expected two opening markers in DSCD-{term}-PL-{number}")
+    if not openings:
+        raise ValueError(f"no opening marker in DSCD-{term}-PL-{number}")
+    start = openings[1] if len(openings) > 1 else openings[0]
     candidates: list[tuple[int, str, _Line]] = []
-    for index in range(openings[1], len(lines)):
+    for index in range(start, len(lines)):
         line = lines[index]
         match = _PREFIX.match(line.text)
-        if match and line.bold and 70 <= line.x <= 150:
+        if match and line.bold and line.x >= 50:
             candidates.append((index, match.group(1), line))
     if not candidates:
         raise ValueError(f"no PDF speaker boundaries in DSCD-{term}-PL-{number}")

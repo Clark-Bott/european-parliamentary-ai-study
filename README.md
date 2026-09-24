@@ -17,10 +17,10 @@ The project is motivated by The Economist's September 2026 article, “AI-writte
 - NETHERLANDS: the corrected-pagination build emitted 344,220 records / 46,237,076 words from 903 reports; disk-backed integrity QA passed. A live coverage audit exactly matches all 903 active corrected/rectified final reports. The other 16 OData rows are one verified 2020 duplicate plus 15 post-2026-06-25 provisional-only meetings, not missing historical transcripts ([build QA](docs/netherlands_corpus_qa.md); [sample QA](docs/netherlands_sample_qa.md)).
 - ITALY: official XML adapter across terms 17–19; a local full-builder run emitted 262,716 records / 49,946,554 words from 1,457 sittings. Disk-backed integrity QA passed, but official enumeration, random boundary review, role/short-turn cleaning, and XML reuse terms have not been signed off ([build QA](docs/italy_corpus_qa.md); [sample QA](docs/italy_sample_qa.md)).
 - GERMANY: verified CC0 CPP-BT 2026-09-19 baseline emitted 64,796 records / 32,514,063 words, including 5,607 records through 2026-09-19; disk-backed integrity QA passed. The official XML supplement after the archive cutoff is blocked by Enodia verification and remains a recorded paid-run gap. Random source-boundary review is outstanding ([build QA](docs/germany_corpus_qa.md); [sample QA](docs/germany_sample_qa.md)).
-- SPAIN: official Diario build emitted 101,069 records / 28,091,299 words from 583 journals, including 252 and 148 turns recovered from two official PDF-only journals with the pypdf fallback; disk-backed integrity QA passed. Speaker/party enrichment and random source-boundary review remain outstanding ([build QA](docs/spain_corpus_qa.md); [sample QA](docs/spain_sample_qa.md)).
+- SPAIN: official Diario build emitted 101,069 records / 28,139,144 words from 583 journals, including 252 and 148 turns recovered from two official PDF-only journals with the pypdf fallback; page-boundary regression and disk-backed integrity QA passed. Speaker/party enrichment and random source-boundary review remain outstanding ([build QA](docs/spain_corpus_qa.md); [sample QA](docs/spain_sample_qa.md)).
 - SIX-COUNTRY BUILD: acquisition adapters and a combined-corpus builder exist; the full 2018–2026 acquisition and random manual QA have **not** been completed. An earlier Dutch 90,706-record build was incomplete because the OData server omitted a pagination link; explicit skip pagination is implemented, but that file must not be used as complete. Spanish numbered-journal gaps are recorded and block paid submission.
 - PANGRAM CLIENT: async task client, request fingerprint cache, resume state, opt-in paid-run guard, and mocked tests implemented; no live request made
-- COST CONTROL: per-item rounded estimator implemented; local length-eligible estimates are **$42,397.05** for France, **$17,802.00** for Germany, **$26,924.80** for Italy, **$26,680.00** for the unreconciled Dutch corpus, and **$14,838.45** for the Spanish corpus including PDF fallbacks. None is an account quote or a validated six-country total.
+- COST CONTROL: per-item rounded estimator implemented; local length-eligible estimates are **$42,397.05** for France, **$17,802.00** for Germany, **$26,924.80** for Italy, **$26,680.00** for the unreconciled Dutch corpus, and **$14,862.70** for the Spanish corpus including PDF fallbacks. None is an account quote or a validated six-country total.
 - ANALYSIS: aggregation, tables, SVG figures, and report generation implemented; exercised on synthetic smoke data only
 - FULL INFERENCE: NOT RUN; no paid API call was made
 
@@ -28,7 +28,7 @@ The API key is **not** the only blocker: post-cutoff German XML, the full Polish
 
 ## Run the verified smoke workflow
 
-Python 3.11 or later. The only runtime dependency is `pypdf==6.1.1`, used for the two Spain PDF fallback journals. The launcher uses `.venv/bin/python`, or `uv` with Python 3.12 when `.venv` is absent.
+Python 3.11 or later. The only runtime dependency is `pypdf==6.1.1`, used for the two Spain PDF fallback journals. The launcher uses the project environment through `uv` when available, then falls back to an explicit `.venv`.
 
 ```bash
 uv venv --python 3.12 .venv
