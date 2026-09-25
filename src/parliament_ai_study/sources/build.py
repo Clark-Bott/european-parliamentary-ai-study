@@ -99,7 +99,6 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
     manifest = target.parent.parent / "manifests" / "combined_corpus.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
     gap_paths = {
-        "Germany": manifest.parent / "germany_unavailable_protocols.json",
         "Spain": manifest.parent / "spain_unavailable_journals.json",
         "Poland": manifest.parent / "poland_unavailable_statements.json",
     }
@@ -116,10 +115,11 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
     report["country_sha256"] = country_hashes
     report["country_year_counts"] = country_year_counts
     report["source_gap_reports"] = {country: str(path) for country, path in gap_paths.items()}
+    report["informational_source_gaps"] = {
+        "Germany": str(manifest.parent / "germany_unavailable_protocols.json")}
     report["missing_source_gap_reports"] = missing_gap_reports
     report["unresolved_source_gaps"] = unresolved_source_gaps
     report["source_gap_free"] = not unresolved_source_gaps and not missing_gap_reports
-    approval_path = manifest.parent / "paid_processing_approval.json"
     blockers = []
     if unresolved_source_gaps:
         blockers.append("unresolved official source gaps")
@@ -130,14 +130,6 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
     report["missing_country_years"] = missing_coverage
     if missing_coverage:
         blockers.append("incomplete 2018–2025 country/year coverage")
-    if approval_path.is_file():
-        from ..pipeline import validate_processing_approval
-        try:
-            validate_processing_approval(approval_path)
-        except PermissionError:
-            blockers.append("paid processing approval is incomplete")
-    else:
-        blockers.append("paid processing approval is absent")
     report["paid_inference_blockers"] = blockers
     report["paid_inference_ready"] = not blockers
     manifest.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

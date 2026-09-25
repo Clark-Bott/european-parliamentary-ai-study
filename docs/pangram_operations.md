@@ -7,17 +7,17 @@ How a paid run behaves at runtime, and what to do when it stops.
 A paid run refuses to start unless all of these hold:
 
 1. `--confirm-paid-run` is passed (and `--dry-run` is not).
-2. `PANGRAM_API_KEY` is set, and Pangram's read-only `GET /models` reports the
+2. The combined corpus passes disk-backed QA with no errors.
+3. Every `country:year` from 2018 to 2025 has records; 2026 country cutoffs may differ.
+4. Both required source-gap reports exist and contain empty JSON lists:
+   `spain_unavailable_journals.json` and `poland_unavailable_statements.json`.
+   The non-empty German post-archive report is retained for provenance but is
+   not a paid-run gate.
+5. If `--max-cost X` is given, the estimate is at most $X.
+6. `PANGRAM_API_KEY` is set, and Pangram's read-only `GET /models` reports the
    configured model for that key.
-3. The combined corpus passes disk-backed QA with no errors.
-4. Every `country:year` from 2018 to 2025 has records.
-5. Every required source-gap report exists and contains an empty JSON list:
-   `germany_unavailable_protocols.json`, `spain_unavailable_journals.json`,
-   and `poland_unavailable_statements.json` by default. An absent report
-   blocks the paid run; it is not treated as evidence of no gaps.
-6. `data/manifests/paid_processing_approval.json` exists and records human
-   review of source terms, processor terms, and international transfers.
-7. If `--max-cost X` is given, the estimate is at most $X.
+
+There is no processing-approval file or corresponding CLI option.
 
 The estimate is printed before the first request in every mode.
 

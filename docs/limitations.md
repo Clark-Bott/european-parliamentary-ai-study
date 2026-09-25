@@ -7,7 +7,7 @@
 5. **Procedural text above the length cutoff.** In the Spanish corpus, 3,830 eligible chair turns (256,449 words) include an explicit vote total. The 40-word cutoff does not remove all non-speech material. The chair-exclusion sensitivity provides a bound, not a validated substitute for manual coding and a precise inclusion rule.
 6. **Corpus unit and cleaning.** Parliamentary interventions are not identical to prepared speeches. Short procedural turns, interruptions, quoted text, staff-drafted remarks, and floor transcripts can distort speech-level estimates.
 7. **Pricing and API behavior change.** Pangram's public price page currently lists different rates for Pangram 3 and 4; rates and account-specific billing can change.[3] A live cost estimate and explicit confirmation must precede any paid request.
-8. **Privacy, rights, and attribution.** Public parliamentary text can still contain personally identifying information, quotations, and sensitive matter. The client submits only speech text, but source permissions and Pangram's processor terms remain separate questions. The unresolved evidence and required approval are recorded in [`rights_and_processing_review.md`](rights_and_processing_review.md). Do not publish individual rankings or detector labels as factual claims.
+8. **Privacy, rights, and attribution.** Public parliamentary text can still contain personally identifying information, quotations, and sensitive matter. The client submits only speech text. Source and processor notes are recorded in [`rights_and_processing_review.md`](rights_and_processing_review.md); there is no approval-file gate. Do not publish individual rankings or detector labels as factual claims.
 
 ## Interpretation rule
 

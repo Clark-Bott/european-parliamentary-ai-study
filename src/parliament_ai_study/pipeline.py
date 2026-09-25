@@ -263,31 +263,6 @@ def _write_outputs(corpus_path: str | Path,
             "errors": qa["errors"], "warnings": qa["warnings"], "results_dir": str(results_dir)}
 
 
-def validate_processing_approval(path: str | Path) -> dict[str, Any]:
-    """Require a recorded human approval for source and processor terms."""
-    approval_path = Path(path)
-    if not approval_path.is_file():
-        raise PermissionError(f"paid processing requires an approval record: {approval_path}")
-    try:
-        approval = json.loads(approval_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        raise PermissionError(f"cannot read processing approval: {approval_path}") from exc
-    required = {
-        "approved": True,
-        "source_terms_reviewed": True,
-        "processor_terms_reviewed": True,
-        "international_transfer_reviewed": True,
-    }
-    missing = [key for key, value in required.items() if approval.get(key) is not value]
-    for key in ("approved_by", "approved_at_utc", "scope"):
-        if not str(approval.get(key, "")).strip():
-            missing.append(key)
-    if missing:
-        raise PermissionError(
-            f"processing approval {approval_path} is incomplete: " + ", ".join(missing))
-    return approval
-
-
 def _qa_for_path(path: str | Path) -> dict[str, Any]:
     """Adapt the disk-backed audit to the pipeline's QA result shape."""
     audit = audit_corpus_file(path)
@@ -336,9 +311,8 @@ def _cached_response(cache: ResponseCache, model: str,
 
 
 def _validate_paid_corpus(corpus_path: Path, qa: dict[str, Any],
-                          gap_reports: str | Path | Iterable[str | Path] | None,
-                          processing_approval: str | Path | None) -> None:
-    """Apply the same full-source checks before *any* parliamentary submission."""
+                          gap_reports: str | Path | Iterable[str | Path] | None) -> None:
+    """Check common years and required Spanish/Polish source coverage."""
     missing = [f"{country}:{year}" for country in COUNTRIES for year in range(2018, 2026)
                if not qa["country_year_counts"].get(f"{country}:{year}")]
     if missing:
@@ -347,13 +321,16 @@ def _validate_paid_corpus(corpus_path: Path, qa: dict[str, Any],
         report_paths = (Path(gap_reports),)
     elif gap_reports is None:
         report_paths = (Path("data/manifests/spain_unavailable_journals.json"),
-                        Path("data/manifests/germany_unavailable_protocols.json"),
                         Path("data/manifests/poland_unavailable_statements.json"))
     else:
         report_paths = tuple(Path(path) for path in gap_reports)
-    if not report_paths:
-        raise ValueError("paid inference requires source-gap reports")
+    if not any(path.name != "germany_unavailable_protocols.json" for path in report_paths):
+        raise ValueError("paid inference requires non-German source-gap reports")
     for gaps_path in report_paths:
+        # The researcher accepts the published 2026-09-11 German cutoff.
+        # Keep the German gap record for provenance, but do not gate inference.
+        if gaps_path.name == "germany_unavailable_protocols.json":
+            continue
         if not gaps_path.is_file():
             raise ValueError(f"required source-gap report is missing: {gaps_path}")
         gaps = json.loads(gaps_path.read_text(encoding="utf-8"))
@@ -361,16 +338,13 @@ def _validate_paid_corpus(corpus_path: Path, qa: dict[str, Any],
             raise ValueError(f"source-gap report must be a JSON list: {gaps_path}")
         if gaps:
             raise ValueError(f"unresolved official source gaps recorded in {gaps_path}; no paid submission")
-    validate_processing_approval(
-        processing_approval or "data/manifests/paid_processing_approval.json")
 
 
 def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  dry_run: bool, price_per_1000_words: float, model: str,
-                 confirm_paid_run: bool = False, api_key: str | None = None,
-                 gap_reports: str | Path | Iterable[str | Path] | None = None,
-                 processing_approval: str | Path | None = None,
-                 positive_controls: str | Path | None = Path(
+                  confirm_paid_run: bool = False, api_key: str | None = None,
+                  gap_reports: str | Path | Iterable[str | Path] | None = None,
+                  positive_controls: str | Path | None = Path(
                      "data/controls/positive_controls.jsonl"),
                   max_cost: float | None = None, sample_budget: float | None = None,
                   sample_seed: int = 2026) -> dict[str, Any]:
@@ -401,7 +375,7 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
     if qa["errors"]:
         raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
     if not dry_run:
-        _validate_paid_corpus(corpus_path, qa, gap_reports, processing_approval)
+        _validate_paid_corpus(corpus_path, qa, gap_reports)
 
     control_records = (load_controls(positive_controls) if positive_controls is not None
                        and Path(positive_controls).is_file() else [])
@@ -558,8 +532,7 @@ def run_api_test(*, corpus: str | Path, results_dir: str | Path, model: str,
                  api_key: str | None, confirm_paid_run: bool,
                  price_per_1000_words: float, max_cost: float = 0.05,
                  test_count: int = 1, test_country: str | None = None,
-                 gap_reports: str | Path | Iterable[str | Path] | None = None,
-                 processing_approval: str | Path | None = None) -> dict[str, Any]:
+                 gap_reports: str | Path | Iterable[str | Path] | None = None) -> dict[str, Any]:
     """Classify at most three real corpus speeches, with full paid-run guards."""
     if not confirm_paid_run:
         raise PermissionError("parliamentary paid test requires --confirm-paid-run")
@@ -578,7 +551,7 @@ def run_api_test(*, corpus: str | Path, results_dir: str | Path, model: str,
     qa = _qa_for_path(corpus_path)
     if qa["errors"]:
         raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
-    _validate_paid_corpus(corpus_path, qa, gap_reports, processing_approval)
+    _validate_paid_corpus(corpus_path, qa, gap_reports)
     selected = _select_test_speeches(corpus_path, count=test_count, country=test_country)
     if file_sha256(corpus_path) != corpus_sha256:
         raise ValueError("corpus changed during API test preflight; no request submitted")

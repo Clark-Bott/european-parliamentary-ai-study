@@ -12,7 +12,7 @@ from parliament_ai_study.cost import estimate_cost
 from parliament_ai_study.io import iter_jsonl, write_jsonl
 from parliament_ai_study.models import Speech, word_count
 from parliament_ai_study.pangram import PangramClient, ResponseCache, request_fingerprint
-from parliament_ai_study.pipeline import run_pipeline, validate_processing_approval
+from parliament_ai_study.pipeline import run_pipeline
 from parliament_ai_study.positive_controls import (
     evaluate_positive_controls,
     import_controls,
@@ -451,38 +451,23 @@ class PipelineTests(unittest.TestCase):
                 "Germany", "France", "Netherlands", "Italy", "Spain", "Poland"})
             self.assertFalse(result["source_gap_free"])
             self.assertEqual(set(result["missing_source_gap_reports"]),
-                             {"Germany", "Spain", "Poland"})
+                             {"Spain", "Poland"})
             self.assertIn("Germany:2018", result["missing_country_years"])
             self.assertFalse(result["paid_inference_ready"])
-            self.assertIn("paid processing approval is absent", result["paid_inference_blockers"])
+            self.assertIn("required source-gap reports are missing", result["paid_inference_blockers"])
+            self.assertIn("Germany", result["informational_source_gaps"])
             self.assertTrue((root.parent / "manifests/combined_corpus.json").is_file())
             gap = root.parent / "manifests/spain_unavailable_journals.json"
             gap.write_text(json.dumps([{"term": 14, "number": 59}]) + "\n", encoding="utf-8")
-            for country in ("germany_unavailable_protocols", "poland_unavailable_statements"):
-                (root.parent / "manifests" / f"{country}.json").write_text("[]\n", encoding="utf-8")
+            (root.parent / "manifests/poland_unavailable_statements.json").write_text("[]\n", encoding="utf-8")
+            (root.parent / "manifests/germany_unavailable_protocols.json").write_text(
+                '[{"date":"2026-09-24","status":"partial"}]\n', encoding="utf-8")
             blocked = build_six_country_corpus(root / "speeches.jsonl", sample_size=1)
             self.assertFalse(blocked["paid_inference_ready"])
             self.assertIn("Spain", blocked["unresolved_source_gaps"])
+            self.assertNotIn("Germany", blocked["unresolved_source_gaps"])
 
-    def test_processing_approval_requires_source_processor_and_transfer_review(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "approval.json"
-            path.write_text(json.dumps({"approved": True}), encoding="utf-8")
-            with self.assertRaisesRegex(PermissionError, "source_terms_reviewed"):
-                validate_processing_approval(path)
-            approval = {
-                "approved": True,
-                "approved_by": "Research owner",
-                "approved_at_utc": "2026-09-24T12:00:00+00:00",
-                "scope": "Pangram API processing for the six-country corpus",
-                "source_terms_reviewed": True,
-                "processor_terms_reviewed": True,
-                "international_transfer_reviewed": True,
-            }
-            path.write_text(json.dumps(approval), encoding="utf-8")
-            self.assertEqual(validate_processing_approval(path), approval)
-
-    def test_paid_mode_requires_processing_approval_before_network(self):
+    def test_paid_mode_ignores_recorded_recent_german_gap_but_enforces_cost(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             corpus = base / "covered.jsonl"
@@ -493,12 +478,17 @@ class PipelineTests(unittest.TestCase):
                        for country in ("Germany", "France", "Netherlands", "Italy", "Spain", "Poland")
                        for year in range(2018, 2026)]
             write_jsonl(corpus, records)
-            (base / "gaps.json").write_text("[]\n", encoding="utf-8")
-            with self.assertRaisesRegex(PermissionError, "requires an approval record"):
+            german = base / "germany_unavailable_protocols.json"
+            german.write_text('[{"number":95},{"number":96}]\n', encoding="utf-8")
+            spain = base / "spain_unavailable_journals.json"
+            spain.write_text("[]\n", encoding="utf-8")
+            poland = base / "poland_unavailable_statements.json"
+            poland.write_text("[]\n", encoding="utf-8")
+            with self.assertRaisesRegex(PermissionError, "exceeds the --max-cost"):
                 run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
-                             confirm_paid_run=True, api_key="fake-key", model="pangram-4",
-                             price_per_1000_words=0.5, gap_reports=base / "gaps.json",
-                             processing_approval=base / "missing-approval.json")
+                              confirm_paid_run=True, api_key="fake-key", model="pangram-4",
+                              price_per_1000_words=0.5, gap_reports=(german, spain, poland),
+                              max_cost=0)
             self.assertFalse((base / "out/raw_pangram").exists())
 
     def test_paid_mode_refuses_incomplete_corpus_before_any_network_call(self):

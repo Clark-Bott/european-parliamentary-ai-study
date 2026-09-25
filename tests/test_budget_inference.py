@@ -117,23 +117,17 @@ class SampleTests(unittest.TestCase):
             write_jsonl(source, fixture())
             gap = root / "gaps.json"
             gap.write_text("[]\n")
-            approval = root / "approval.json"
-            approval.write_text(json.dumps({
-                "approved": True, "approved_by": "Synthetic fixture test",
-                "approved_at_utc": "2026-09-25T00:00:00Z", "scope": "synthetic fixture",
-                "source_terms_reviewed": True, "processor_terms_reviewed": True,
-                "international_transfer_reviewed": True}))
             with patch("parliament_ai_study.pipeline.PangramClient", FakeClient):
                 with self.assertRaisesRegex(ValueError, "conservative minimum"):
                     run_pipeline(corpus=source, results_dir=root / "paid", dry_run=False,
                                  price_per_1000_words=0.5, model="pangram-4",
                                  confirm_paid_run=True, api_key="fake", gap_reports=gap,
-                                 processing_approval=approval, positive_controls=None,
+                                 positive_controls=None,
                                  sample_budget=1, max_cost=1)
                 result = run_pipeline(corpus=source, results_dir=root / "paid", dry_run=False,
                                       price_per_1000_words=0.5, model="pangram-4",
                                       confirm_paid_run=True, api_key="fake", gap_reports=gap,
-                                      processing_approval=approval, positive_controls=None,
+                                      positive_controls=None,
                                       sample_budget=25, max_cost=25)
             self.assertTrue(result["sampled"])
             self.assertFalse(result["mocked"])
@@ -178,16 +172,9 @@ class PaidSmokeTests(unittest.TestCase):
             write_jsonl(corpus, fixture())
             gap = root / "gaps.json"
             gap.write_text("[]\n")
-            approval = root / "approval.json"
-            approval.write_text(json.dumps({
-                "approved": True, "approved_by": "Synthetic fixture test",
-                "approved_at_utc": "2026-09-25T00:00:00Z", "scope": "synthetic fixture",
-                "source_terms_reviewed": True, "processor_terms_reviewed": True,
-                "international_transfer_reviewed": True}))
             options = dict(corpus=corpus, results_dir=root, model="pangram-4",
                            api_key="fake", confirm_paid_run=True,
-                           price_per_1000_words=0.5, gap_reports=gap,
-                           processing_approval=approval)
+                           price_per_1000_words=0.5, gap_reports=gap)
             with patch("parliament_ai_study.pipeline.PangramClient", FakeClient):
                 with self.assertRaisesRegex(PermissionError, "confirm-paid-run"):
                     run_api_test(**{**options, "confirm_paid_run": False})
@@ -219,14 +206,14 @@ class PaidSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "existing API test selection differs"):
                 run_api_test(**{**options, "corpus": changed})
 
-    def test_paid_api_test_keeps_full_coverage_gap_and_approval_guards(self):
+    def test_paid_api_test_keeps_full_coverage_and_polish_spanish_gap_guards(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             corpus = root / "single.jsonl"
             write_jsonl(corpus, fixture()[:1])
             options = dict(corpus=corpus, results_dir=root, model="pangram-4", api_key="fake",
                            confirm_paid_run=True, price_per_1000_words=0.5,
-                           gap_reports=root / "gaps.json", processing_approval=root / "approval.json")
+                           gap_reports=root / "gaps.json")
             with patch("parliament_ai_study.pipeline.PangramClient", side_effect=AssertionError("network")):
                 with self.assertRaisesRegex(ValueError, "country/year coverage"):
                     run_api_test(**options)
@@ -237,8 +224,11 @@ class PaidSmokeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "unresolved official source gaps"):
                     run_api_test(**options)
                 (root / "gaps.json").write_text("[]\n")
-                with self.assertRaisesRegex(PermissionError, "requires an approval record"):
-                    run_api_test(**options)
+                german = root / "germany_unavailable_protocols.json"
+                german.write_text('[{"number":95},{"number":96}]\n')
+                with self.assertRaisesRegex(PermissionError, "exceed the test cap"):
+                    run_api_test(**{**options, "gap_reports": (german, root / "gaps.json")},
+                                 max_cost=0)
             self.assertFalse((root / "api_test").exists())
 
     def test_cli_test_does_not_build_missing_corpus(self):

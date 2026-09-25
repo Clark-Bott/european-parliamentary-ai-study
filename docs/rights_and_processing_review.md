@@ -1,6 +1,6 @@
 # Rights and third-party processing review
 
-Review date: 2026-09-24. This is an engineering evidence record, not legal advice. It distinguishes public source terms from unresolved permission. No Pangram text has been submitted.
+Evidence collected 2026-09-24. This is a source/processor reference, not legal advice or a runtime approval checklist. The researcher reported on 2026-09-25 that they checked processing readiness and directed removal of the approval-file step. This report is a user decision, not independent verification of account-specific terms. No Pangram text has been submitted yet.
 
 ## Source materials
 
@@ -34,34 +34,13 @@ A separate Pangram enterprise page says API content is processed transiently and
 - Public dashboard sharing is disabled in the API configuration.
 - Responses are cached locally by a SHA-256 fingerprint of exact text and model configuration.
 - API keys are read from the environment and are not stored in source files.
-- Paid execution requires an explicit flag, complete country/year coverage, present and empty German, Spanish, and Polish source-gap reports, and a recorded human approval.
+- Paid execution requires an explicit flag, complete 2018–2025 country/year coverage, and present and empty Spanish and Polish source-gap reports. The recorded German 2026 cutoff is informational, not a paid gate; no processing-approval file is required.
 
-These safeguards reduce exposure but do not replace a processor agreement or legal approval.
+These safeguards reduce exposure; they do not establish account-specific contractual terms.
 
-## Required approval before inference
+## Researcher decision
 
-Obtain and archive:
-
-1. Pangram enterprise/API terms covering this research corpus and the selected plan.
-2. A written API-content retention and deletion schedule that resolves the public-policy conflict.
-3. The current subprocessor list and applicable data-processing agreement.
-4. Confirmation of SCCs or another valid transfer mechanism for EU-origin data.
-5. Source permission for Italy, Spain, and Poland, or a documented legal basis and counsel approval.
-6. An attribution file, retention schedule, and deletion owner for local raw responses and controls.
-
-Until those items exist, the repository must not submit text. The machine-readable `data/manifests/paid_processing_approval.json` guard is intentionally absent until a responsible reviewer completes the review. After review, the file must have this shape; the values are assertions by the reviewer, not defaults supplied by the software:
-
-```json
-{
-  "approved": true,
-  "approved_by": "name or accountable role",
-  "approved_at_utc": "2026-09-24T12:00:00+00:00",
-  "scope": "Pangram API processing for the reviewed six-country corpus",
-  "source_terms_reviewed": true,
-  "processor_terms_reviewed": true,
-  "international_transfer_reviewed": true
-}
-```
+The researcher confirmed readiness to submit an explicitly authorized, low-cost corpus test and removed the approval-record workflow. The source and processor observations above remain useful context but are not machine-enforced. The 2018–2025 coverage and Spanish/Polish source-gap checks remain separate data-integrity gates.
 
 ## Public evidence
 

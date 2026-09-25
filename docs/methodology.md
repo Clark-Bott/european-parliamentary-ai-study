@@ -38,7 +38,7 @@ cannot establish causal or personal AI use.
 
 ## Pangram use and cost
 
-The documented API is asynchronous (`POST /task`, then poll `GET /task/{task_id}`); new integrations must specify a model selector, and `GET /models` reports key-specific access.[2] The payload contains only `speech_text`; speaker identity and source metadata remain local. Developer pricing lists Pangram 4 at $0.05 per **started 100-word block for each submitted item** and Pangram 3 at a different unit/rate. `estimate_cost` uses `ceil(speech_words/100)` for Pangram 4's default configuration; the task client does not claim a bulk discount.[3] Billing, account-specific terms, source rights, processor terms, retention, and international transfers must be reviewed and recorded before paid submission. The runtime rejects a missing processing-approval record. No paid call is part of this work.
+The documented API is asynchronous (`POST /task`, then poll `GET /task/{task_id}`); new integrations must specify a model selector, and `GET /models` reports key-specific access.[2] The payload contains only `speech_text`; speaker identity and source metadata remain local. Developer pricing lists Pangram 4 at $0.05 per **started 100-word block for each submitted item** and Pangram 3 at a different unit/rate. `estimate_cost` uses `ceil(speech_words/100)` for Pangram 4's default configuration; the task client does not claim a bulk discount.[3] The researcher reports having checked billing and processing terms. The runtime requires an explicit paid flag and cost preflight but no approval file. The study has not yet run paid inference.
 
 ## Sources
 

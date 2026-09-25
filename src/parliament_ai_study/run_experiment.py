@@ -49,14 +49,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--country", help="optional country filter for --estimate-only")
     parser.add_argument("--year", type=int, action="append", help="optional year filter (repeatable) for --estimate-only")
     parser.add_argument("--period", choices=("historical", "post_chatgpt"), help="optional period filter for --estimate-only")
-    parser.add_argument("--processing-approval", type=Path,
-                        default=Path("data/manifests/paid_processing_approval.json"),
-                        help="recorded human approval for source, processor, and transfer terms")
     parser.add_argument("--gap-report", type=Path, action="append",
                         default=[Path("data/manifests/spain_unavailable_journals.json"),
-                                 Path("data/manifests/germany_unavailable_protocols.json"),
                                  Path("data/manifests/poland_unavailable_statements.json")],
-                        help="recorded official source gaps that must be empty before paid inference; repeatable")
+                        help="required Spanish/Polish source gaps that must be empty before paid inference; repeatable")
     return parser
 
 
@@ -79,8 +75,7 @@ def main(argv: list[str] | None = None) -> int:
                                price_per_1000_words=price,
                                max_cost=0.05 if args.max_cost is None else args.max_cost,
                                test_count=args.test_count, test_country=args.test_country,
-                               gap_reports=args.gap_report,
-                               processing_approval=args.processing_approval)
+                               gap_reports=args.gap_report)
         print(f"Corpus API diagnostic completed; {len(summary['completed_speeches'])} short speech(es). "
               f"Estimated cost ${summary['estimated_max_cost_usd']:.4f}; "
               f"record at {args.results_dir / 'api_test' / 'test_result.json'}")
@@ -122,10 +117,9 @@ def main(argv: list[str] | None = None) -> int:
     summary = run_pipeline(corpus=corpus, results_dir=args.results_dir, dry_run=args.dry_run,
                            price_per_1000_words=price, model=model,
                            confirm_paid_run=args.confirm_paid_run,
-                           api_key=os.environ.get("PANGRAM_API_KEY"),
-                           gap_reports=args.gap_report,
-                           processing_approval=args.processing_approval,
-                            max_cost=args.max_cost, sample_budget=args.sample_budget,
+                            api_key=os.environ.get("PANGRAM_API_KEY"),
+                            gap_reports=args.gap_report,
+                             max_cost=args.max_cost, sample_budget=args.sample_budget,
                             sample_seed=args.sample_seed)
     print(f"Pipeline complete: {summary['results_dir']}")
     mode = "synthetic smoke test" if summary["synthetic_smoke_test"] else (
