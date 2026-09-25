@@ -52,7 +52,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    arguments = sys.argv[1:] if argv is None else argv
+    args = _parser().parse_args(arguments)
     load_dotenv()
     model = args.model or os.environ.get("PANGRAM_MODEL", "pangram-4")
     price = args.price_per_1000_words
@@ -66,6 +67,13 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("refusing paid inference without --confirm-paid-run")
     if args.build_corpus or (not args.dry_run and not args.corpus.is_file()):
         build_six_country_corpus(args.corpus)
+    if args.dry_run and not args.corpus.is_file() and any(
+        argument == "--corpus" or argument.startswith("--corpus=") for argument in arguments
+    ):
+        raise FileNotFoundError(
+            f"explicit corpus not found: {args.corpus}; omit --corpus for a synthetic smoke test "
+            "or use --build-corpus to acquire official transcripts"
+        )
     if args.estimate_only:
         if not args.corpus.is_file():
             raise SystemExit(f"corpus not found: {args.corpus}")

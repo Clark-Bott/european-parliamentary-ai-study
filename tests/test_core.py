@@ -731,6 +731,16 @@ class SecondaryAnalysisTests(unittest.TestCase):
         self.assertTrue(any(row["group"] == "__UNKNOWN__" for row in splits["party"]))
         self.assertEqual(splits["length_band"][0]["group"], "100–249")
 
+    def test_explicit_missing_dry_run_corpus_never_falls_back_to_fixture(self):
+        from parliament_ai_study.run_experiment import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            with self.assertRaisesRegex(FileNotFoundError, "explicit corpus not found"):
+                main(["--dry-run", "--corpus", str(base / "missing.jsonl"),
+                      "--results-dir", str(base / "out")])
+            self.assertFalse((base / "out/processed/mock_corpus.jsonl").exists())
+
 
     def test_max_cost_cap_refuses_a_run_over_the_limit(self):
         with tempfile.TemporaryDirectory() as directory:
