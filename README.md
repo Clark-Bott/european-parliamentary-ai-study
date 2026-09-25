@@ -40,7 +40,7 @@ The API key is **not** the only blocker: post-cutoff German XML, the full Polish
 
 ## Run the verified smoke workflow
 
-Python 3.11 or later. The only runtime dependency is `pypdf==6.1.1`, used for the two Spain PDF fallback journals. The launcher uses the project environment through `uv` when available, then falls back to an explicit `.venv`.
+Python 3.11 or later. Runtime dependencies are `pypdf==6.1.1` for the two Spain PDF fallback journals and Rich for the read-only Polish acquisition monitor. The launcher uses the project environment through `uv` when available, then falls back to an explicit `.venv`.
 
 ```bash
 uv venv --python 3.12 .venv
