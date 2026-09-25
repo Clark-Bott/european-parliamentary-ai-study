@@ -104,6 +104,38 @@ def _fraction(response: dict[str, Any], key: str) -> float:
 ResponseSource = Mapping[str, dict[str, Any]] | Callable[[Any], dict[str, Any]]
 
 
+def response_shares(response: dict[str, Any], speech_id: str) -> tuple[float, float]:
+    """AI-only and assisted fractions on the common source-word denominator."""
+    ai = _fraction(response, "fraction_ai")
+    mixed = _fraction(response, "fraction_ai_assisted")
+    if ai + mixed > 1.000001:
+        raise ValueError(f"AI and assisted fractions exceed 1 for {speech_id}")
+    windows = response.get("windows")
+    if isinstance(windows, list) and windows:
+        window_ai = window_mixed = 0
+        classified_words = 0
+        unknown_labels: set[str] = set()
+        for window in windows:
+            label = _normalize_window_label(window.get("label", ""))
+            count = int(window.get("word_count", 0))
+            if count < 0:
+                raise ValueError(f"negative window word count for {speech_id}")
+            classified_words += count
+            if label in AI_WINDOW_LABELS:
+                window_ai += count
+            elif label in MIXED_WINDOW_LABELS:
+                window_mixed += count
+            elif label not in HUMAN_WINDOW_LABELS:
+                unknown_labels.add(label)
+        if classified_words and not unknown_labels:
+            # Pangram may normalize text; its window words need not equal our
+            # Unicode tokenizer's count. Use its proportions, not raw offsets.
+            ai = window_ai / classified_words
+            mixed = window_mixed / classified_words
+        # Unknown labels fall back to validated response-level fractions.
+    return ai, mixed
+
+
 def aggregate_results(
     speeches: Iterable[Any],
     responses: ResponseSource,
@@ -127,44 +159,9 @@ def aggregate_results(
             continue
         speech_id = str(get("speech_id", ""))
         response = responses(speech) if callable(responses) else responses[speech_id]
-        ai = _fraction(response, "fraction_ai")
-        mixed = _fraction(response, "fraction_ai_assisted")
-        if ai + mixed > 1.000001:
-            raise ValueError(f"AI and assisted fractions exceed 1 for {speech_id}")
+        ai, mixed = response_shares(response, speech_id)
         ai_words = words * ai
         mixed_words = words * mixed
-        windows = response.get("windows")
-        if isinstance(windows, list) and windows:
-            window_ai = window_mixed = 0
-            classified_words = 0
-            unknown_labels: set[str] = set()
-            for window in windows:
-                label = _normalize_window_label(window.get("label", ""))
-                count = int(window.get("word_count", 0))
-                if count < 0:
-                    raise ValueError(f"negative window word count for {speech_id}")
-                classified_words += count
-                if label in AI_WINDOW_LABELS:
-                    window_ai += count
-                elif label in MIXED_WINDOW_LABELS:
-                    window_mixed += count
-                elif label in HUMAN_WINDOW_LABELS:
-                    pass
-                else:
-                    unknown_labels.add(label)
-            if classified_words and not unknown_labels:
-                # Pangram 4 can normalize the submitted text. Its window word
-                # count need not equal our Unicode tokenizer's word count.
-                # Scale window proportions to the common source denominator.
-                ai = window_ai / classified_words
-                mixed = window_mixed / classified_words
-                ai_words = words * ai
-                mixed_words = words * mixed
-            elif unknown_labels:
-                # An unrecognised window vocabulary must not be read as zero
-                # AI words. Keep the validated response-level fractions, which
-                # Pangram computes from the same windows.
-                pass
         day = date.fromisoformat(str(get("date")))
         key = (str(get("country")), _period(day, period))
         group = groups[key]

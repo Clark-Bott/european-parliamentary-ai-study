@@ -26,6 +26,16 @@ An intervention must have non-empty text, a traceable source record, a plausible
 
 Aggregate by country and month, quarter, and year. Provide word-weighted and intervention-weighted shares, AI-only and AI-plus-mixed results, alternative minimum lengths, exclusions of ministers/chairs, pre/post comparisons, language-specific historical baselines, descriptive party/speaker/term/topic splits when provenance supports them, and uncertainty intervals appropriate to the sampling design. Do not make individual politician-use allegations from detector scores.
 
+The single-pass descriptive tables group eligible turns by available party,
+legislative term, and length band. Missing party/term fields remain explicit
+`__UNKNOWN__` groups, not guessed assignments. A separate exploratory table
+groups stable speaker IDs by a local SHA-256 pseudonym across years, and omits
+groups with fewer than 10 eligible turns; it is not a list of politicians who
+used AI. Government/opposition and debate/topic labels are not derived where
+the common corpus has no reliable time-specific metadata. These descriptive
+splits use the same Pangram window proportions as the primary estimator and
+cannot establish causal or personal AI use.
+
 ## Pangram use and cost
 
 The documented API is asynchronous (`POST /task`, then poll `GET /task/{task_id}`); new integrations must specify a model selector, and `GET /models` reports key-specific access.[2] The payload contains only `speech_text`; speaker identity and source metadata remain local. Developer pricing lists Pangram 4 at $0.05 per **started 100-word block for each submitted item** and Pangram 3 at a different unit/rate. `estimate_cost` uses `ceil(speech_words/100)` for Pangram 4's default configuration; the task client does not claim a bulk discount.[3] Billing, account-specific terms, source rights, processor terms, retention, and international transfers must be reviewed and recorded before paid submission. The runtime rejects a missing processing-approval record. No paid call is part of this work.

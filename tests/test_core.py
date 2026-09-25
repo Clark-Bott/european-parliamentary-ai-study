@@ -27,6 +27,7 @@ from parliament_ai_study.review import (
     sample_records,
 )
 from parliament_ai_study.sampling import sample_historical_controls
+from parliament_ai_study.secondary import descriptive_breakdowns
 from parliament_ai_study.sources.build import build_six_country_corpus
 
 
@@ -559,7 +560,10 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(len(summary["countries"]), 6)
             for relative in (
                 "tables/corpus_size.csv", "tables/annual_results.csv",
-                "tables/cost_estimate.csv", "tables/sensitivity.csv", "figures/all_countries.svg",
+                "tables/cost_estimate.csv", "tables/sensitivity.csv",
+                "tables/party_breakdown.csv", "tables/legislative_term_breakdown.csv",
+                "tables/length_band_breakdown.csv", "tables/speaker_breakdown.csv",
+                "figures/all_countries.svg",
                 "reports/dry_run_report.md", "processed/mock_results.jsonl",
             ):
                 self.assertTrue((Path(directory) / relative).is_file(), relative)
@@ -701,6 +705,31 @@ class SourceBoundaryReviewTests(unittest.TestCase):
             self.assertEqual([row["speech_id"] for row in actual],
                              [row["speech_id"] for row in expected])
             self.assertTrue(any(int(row["speech_id"].split("-")[1]) >= 64 for row in actual))
+
+
+class SecondaryAnalysisTests(unittest.TestCase):
+    def test_splits_use_window_fractions_and_suppress_small_speaker_groups(self):
+        rows = [{"country": "Germany", "date": "2024-03-01",
+                 "speech_id": f"s-{index}", "speaker_id": "member-1" if index < 11 else "member-2",
+                 "party": "Test party" if index < 11 else "",
+                 "legislative_term": "20", "word_count": 100}
+                for index in range(12)]
+        def response(speech):
+            if speech["speech_id"] == "s-0":
+                return {"fraction_ai": 0.2, "fraction_ai_assisted": 0.1,
+                        "windows": [{"label": "AI Generated", "word_count": 50},
+                                    {"label": "Human Written", "word_count": 50}]}
+            return {"fraction_ai": 0.2, "fraction_ai_assisted": 0.1}
+        splits = descriptive_breakdowns(rows, response)
+        self.assertEqual(len(splits["speaker"]), 1)
+        self.assertEqual(splits["speaker"][0]["speeches"], 11)
+        self.assertEqual(splits["speaker"][0]["period"], "all")
+        self.assertEqual(len(splits["speaker"][0]["group"]), 16)
+        self.assertTrue(all("member" not in str(row) for row in splits["speaker"]))
+        party = next(row for row in splits["party"] if row["group"] == "Test party")
+        self.assertAlmostEqual(party["ai_word_share"], (0.5 + 10 * 0.2) / 11)
+        self.assertTrue(any(row["group"] == "__UNKNOWN__" for row in splits["party"]))
+        self.assertEqual(splits["length_band"][0]["group"], "100–249")
 
 
     def test_max_cost_cap_refuses_a_run_over_the_limit(self):

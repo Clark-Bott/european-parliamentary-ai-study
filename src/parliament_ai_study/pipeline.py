@@ -18,6 +18,7 @@ from .models import Speech
 from .pangram import PangramClient, ResponseCache, request_fingerprint
 from .positive_controls import evaluate_positive_controls, load_controls
 from .qa import COUNTRIES, audit_corpus_file
+from .secondary import descriptive_breakdowns
 
 
 def _mock_corpus() -> list[dict[str, Any]]:
@@ -187,6 +188,10 @@ def _write_outputs(corpus_path: str | Path,
                                     max(0.0, row["ai_word_share"] - baseline_rate)
                                     if baseline_rate is not None else None})
     _write_csv(tables / "sensitivity.csv", sensitivity)
+    print("Aggregating descriptive party, term, length and speaker splits…", flush=True)
+    descriptive = descriptive_breakdowns(iter_jsonl(corpus_path), response_for_speech)
+    for dimension, rows in descriptive.items():
+        _write_csv(tables / f"{dimension}_breakdown.csv", rows)
     # Optional Phase 8 calibration: synthetic LLM passages are scored only if
     # the researcher has prepared them; their absence is not an error.
     positive_controls: dict[str, Any] = {"prepared": False}
@@ -224,7 +229,7 @@ def _write_outputs(corpus_path: str | Path,
                "Mock values are not Pangram findings and must not be cited as empirical results. "
                + ("The corpus is also a synthetic fixture. " if synthetic else "The supplied corpus may be real data. ")) if mocked else
               "This report summarizes Pangram detector output. Classification is not proof of authorship or personal AI use.", "",
-               "Outputs: annual/monthly/quarterly tables, historical baseline and pooled pre/post tables, length/role sensitivity, SVG figures, corpus QA JSON, and machine-readable result JSONL."]
+                "Outputs: annual/monthly/quarterly tables, historical baseline and pooled pre/post tables, length/role sensitivity, descriptive party/term/length/pseudonymous-speaker splits, SVG figures, corpus QA JSON, and machine-readable result JSONL."]
     (reports / ("dry_run_report.md" if mocked else "results_report.md")).write_text("\n".join(report) + "\n", encoding="utf-8")
     return {"synthetic_smoke_test": synthetic, "mocked": mocked, "speeches": qa["records"], "words": estimate["words"],
             "estimated_cost": estimate["estimated_cost"], "countries": qa["countries_present"],
