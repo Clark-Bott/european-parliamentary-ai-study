@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 import shutil
 
@@ -57,12 +58,19 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     country_hashes = {}
+    country_year_counts: dict[str, int] = {}
     for country, path in paths.items():
         country_digest = hashlib.sha256()
         with path.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 country_digest.update(chunk)
         country_hashes[country] = country_digest.hexdigest()
+        for record in iter_jsonl(path):
+            if record.get("country") != country:
+                raise ValueError(f"{path}: expected country {country}, found {record.get('country')}")
+            year = date.fromisoformat(str(record.get("date", ""))).year
+            key = f"{country}:{year}"
+            country_year_counts[key] = country_year_counts.get(key, 0) + 1
     # Controls are separate from the full historical archive. One deterministic
     # sample per country, at the path the control manifests already track, so a
     # rebuild reuses finished samples instead of writing a second variant.
@@ -93,20 +101,42 @@ def build_six_country_corpus(corpus: str | Path = "data/processed/speeches.jsonl
     gap_paths = {
         "Germany": manifest.parent / "germany_unavailable_protocols.json",
         "Spain": manifest.parent / "spain_unavailable_journals.json",
+        "Poland": manifest.parent / "poland_unavailable_statements.json",
     }
-    unresolved_source_gaps = {
-        country: str(path) for country, path in gap_paths.items()
-        if path.is_file() and json.loads(path.read_text(encoding="utf-8"))
-    }
+    missing_gap_reports = {country: str(path) for country, path in gap_paths.items()
+                           if not path.is_file()}
+    unresolved_source_gaps = {}
+    for country, path in gap_paths.items():
+        if path.is_file():
+            gaps = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(gaps, list):
+                raise ValueError(f"source-gap report must be a JSON list: {path}")
+            if gaps:
+                unresolved_source_gaps[country] = str(path)
     report["country_sha256"] = country_hashes
+    report["country_year_counts"] = country_year_counts
     report["source_gap_reports"] = {country: str(path) for country, path in gap_paths.items()}
+    report["missing_source_gap_reports"] = missing_gap_reports
     report["unresolved_source_gaps"] = unresolved_source_gaps
-    report["source_gap_free"] = not unresolved_source_gaps
+    report["source_gap_free"] = not unresolved_source_gaps and not missing_gap_reports
     approval_path = manifest.parent / "paid_processing_approval.json"
     blockers = []
     if unresolved_source_gaps:
         blockers.append("unresolved official source gaps")
-    if not approval_path.is_file():
+    if missing_gap_reports:
+        blockers.append("required source-gap reports are missing")
+    missing_coverage = [f"{country}:{year}" for country in paths for year in range(2018, 2026)
+                        if not country_year_counts.get(f"{country}:{year}")]
+    report["missing_country_years"] = missing_coverage
+    if missing_coverage:
+        blockers.append("incomplete 2018–2025 country/year coverage")
+    if approval_path.is_file():
+        from ..pipeline import validate_processing_approval
+        try:
+            validate_processing_approval(approval_path)
+        except PermissionError:
+            blockers.append("paid processing approval is incomplete")
+    else:
         blockers.append("paid processing approval is absent")
     report["paid_inference_blockers"] = blockers
     report["paid_inference_ready"] = not blockers

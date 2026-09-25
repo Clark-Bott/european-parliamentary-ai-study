@@ -146,22 +146,66 @@ def iter_sejm_speeches(*, start_year: int = 2018, end_year: int = 2026,
 
 
 def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw") -> dict[str, Any]:
-    """Summarize cached Sejm proceeding indexes and statement-body files."""
+    """Reconcile every 2018–2026 indexed sitting date with its spoken bodies."""
     terms = []
+    missing: list[dict[str, Any]] = []
     for term in TERMS:
         root = Path(raw_dir) / "poland" / f"term-{term}"
         proceedings_path = root / "proceedings.json"
+        if not proceedings_path.is_file():
+            missing.append({"term": term, "reason": "proceedings index missing"})
         proceedings = json.loads(proceedings_path.read_text(encoding="utf-8")) if proceedings_path.is_file() else []
         dates = [date_value for sitting in proceedings for date_value in sitting.get("dates", [])]
+        target_days = [(int(sitting["number"]), date_value)
+                       for sitting in proceedings for date_value in sitting.get("dates", [])
+                       if 2018 <= int(date_value[:4]) <= 2026]
+        expected_bodies = 0
+        for proceeding, date_value in target_days:
+            day = root / f"proceeding-{proceeding}" / date_value
+            metadata_path = day / "statements.json"
+            if not metadata_path.is_file():
+                missing.append({"term": term, "proceeding": proceeding,
+                                "date": date_value, "reason": "statement metadata missing"})
+                continue
+            try:
+                statements = json.loads(metadata_path.read_text(encoding="utf-8"))["statements"]
+            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                missing.append({"term": term, "proceeding": proceeding,
+                                "date": date_value, "reason": f"invalid statement metadata: {exc}"})
+                continue
+            if not isinstance(statements, list):
+                missing.append({"term": term, "proceeding": proceeding,
+                                "date": date_value, "reason": "statement list is not an array"})
+                continue
+            for statement in statements:
+                if not isinstance(statement, dict):
+                    missing.append({"term": term, "proceeding": proceeding,
+                                    "date": date_value, "reason": "statement metadata is not an object"})
+                    continue
+                if statement.get("unspoken"):
+                    continue
+                expected_bodies += 1
+                try:
+                    number = int(statement["num"])
+                except (KeyError, ValueError, TypeError):
+                    missing.append({"term": term, "proceeding": proceeding,
+                                    "date": date_value, "reason": "invalid statement number"})
+                    continue
+                if not (day / f"statement-{number}.html").is_file():
+                    missing.append({"term": term, "proceeding": proceeding,
+                                    "date": date_value, "statement": number,
+                                    "reason": "spoken statement body missing"})
         body_files = list(root.glob("proceeding-*/**/statement-*.html"))
         metadata_files = list(root.glob("proceeding-*/**/statements.json"))
         terms.append({
             "term": term, "proceedings": len(proceedings), "dates": len(dates),
+            "target_dates": len(target_days), "expected_spoken_bodies": expected_bodies,
             "first_date": min(dates) if dates else None, "last_date": max(dates) if dates else None,
             "statement_metadata_files": len(metadata_files), "statement_body_files": len(body_files),
         })
-    return {"terms": terms,
-            "note": "Raw-file audit only; official API index reconciliation and random boundary review remain separate."}
+    return {"terms": terms, "missing": missing, "complete": not missing,
+            "note": "Raw-file reconciliation against cached official proceedings indexes; "
+                    "independent live-index and manual boundary review remain separate."}
 
 
 def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
@@ -228,8 +272,12 @@ def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_ye
         write_jsonl(output_path, serialized())
     coverage_path = Path(manifest_path).parent / "poland_coverage_audit.json"
     coverage_path.parent.mkdir(parents=True, exist_ok=True)
-    coverage_path.write_text(json.dumps(audit_sejm_raw_coverage(raw_dir), ensure_ascii=False, indent=2) + "\n",
+    coverage = audit_sejm_raw_coverage(raw_dir)
+    coverage_path.write_text(json.dumps(coverage, ensure_ascii=False, indent=2) + "\n",
                              encoding="utf-8")
+    gap_path = coverage_path.parent / "poland_unavailable_statements.json"
+    gap_path.write_text(json.dumps(coverage["missing"], ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8")
     return {"records": records, "words": words, "coverage_audit": str(coverage_path)}
 
 

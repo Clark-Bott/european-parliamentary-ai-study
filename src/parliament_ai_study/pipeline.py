@@ -343,11 +343,19 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
             report_paths = (Path(gap_reports),)
         elif gap_reports is None:
             report_paths = (Path("data/manifests/spain_unavailable_journals.json"),
-                            Path("data/manifests/germany_unavailable_protocols.json"))
+                            Path("data/manifests/germany_unavailable_protocols.json"),
+                            Path("data/manifests/poland_unavailable_statements.json"))
         else:
             report_paths = tuple(Path(path) for path in gap_reports)
+        if not report_paths:
+            raise ValueError("paid inference requires source-gap reports")
         for gaps_path in report_paths:
-            if gaps_path.is_file() and json.loads(gaps_path.read_text(encoding="utf-8")):
+            if not gaps_path.is_file():
+                raise ValueError(f"required source-gap report is missing: {gaps_path}")
+            gaps = json.loads(gaps_path.read_text(encoding="utf-8"))
+            if not isinstance(gaps, list):
+                raise ValueError(f"source-gap report must be a JSON list: {gaps_path}")
+            if gaps:
                 raise ValueError(f"unresolved official source gaps recorded in {gaps_path}; no paid submission")
         validate_processing_approval(
             processing_approval or "data/manifests/paid_processing_approval.json")

@@ -636,6 +636,25 @@ class SejmParserTests(unittest.TestCase):
         self.assertEqual(term["proceedings"], 1)
         self.assertEqual(term["dates"], 2)
         self.assertEqual(term["statement_body_files"], 1)
+        self.assertFalse(report["complete"])
+        self.assertTrue(any(gap.get("date") == "2018-01-11" for gap in report["missing"]))
+
+    def test_raw_coverage_checks_all_indexed_spoken_bodies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "poland"
+            for term in (8, 9, 10):
+                index = root / f"term-{term}/proceedings.json"
+                index.parent.mkdir(parents=True)
+                index.write_text(json.dumps([{"number": 1, "dates": ["2018-01-10"]}]
+                                            if term == 8 else []), encoding="utf-8")
+            day = root / "term-8/proceeding-1/2018-01-10"
+            day.mkdir(parents=True)
+            (day / "statements.json").write_text(json.dumps({"statements": [
+                {"num": 1, "unspoken": False}, {"num": 2, "unspoken": True}]}), encoding="utf-8")
+            report = audit_sejm_raw_coverage(Path(directory))
+            self.assertEqual([gap["statement"] for gap in report["missing"]], [1])
+            (day / "statement-1.html").write_text("<p>Statement</p>", encoding="utf-8")
+            self.assertTrue(audit_sejm_raw_coverage(Path(directory))["complete"])
 
 
 class FranceParserTests(unittest.TestCase):

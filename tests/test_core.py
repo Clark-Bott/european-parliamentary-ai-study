@@ -447,12 +447,17 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(result["sample_records"], 6)
             self.assertEqual(set(result["country_sha256"]), {
                 "Germany", "France", "Netherlands", "Italy", "Spain", "Poland"})
-            self.assertTrue(result["source_gap_free"])
+            self.assertFalse(result["source_gap_free"])
+            self.assertEqual(set(result["missing_source_gap_reports"]),
+                             {"Germany", "Spain", "Poland"})
+            self.assertIn("Germany:2018", result["missing_country_years"])
             self.assertFalse(result["paid_inference_ready"])
             self.assertIn("paid processing approval is absent", result["paid_inference_blockers"])
             self.assertTrue((root.parent / "manifests/combined_corpus.json").is_file())
             gap = root.parent / "manifests/spain_unavailable_journals.json"
-            write_jsonl(gap, [{"term": 14, "number": 59}])
+            gap.write_text(json.dumps([{"term": 14, "number": 59}]) + "\n", encoding="utf-8")
+            for country in ("germany_unavailable_protocols", "poland_unavailable_statements"):
+                (root.parent / "manifests" / f"{country}.json").write_text("[]\n", encoding="utf-8")
             blocked = build_six_country_corpus(root / "speeches.jsonl", sample_size=1)
             self.assertFalse(blocked["paid_inference_ready"])
             self.assertIn("Spain", blocked["unresolved_source_gaps"])
@@ -520,11 +525,28 @@ class PipelineTests(unittest.TestCase):
                        for year in range(2018, 2026)]
             write_jsonl(corpus, records)
             gaps = base / "gaps.json"
-            write_jsonl(gaps, [{"term": 12, "number": 162}])
+            gaps.write_text(json.dumps([{"term": 12, "number": 162}]) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unresolved official source gaps"):
                 run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
                              confirm_paid_run=True, api_key="fake-key", model="pangram-4",
                              price_per_1000_words=0.5, gap_reports=gaps)
+            self.assertFalse((base / "out/raw_pangram").exists())
+
+    def test_paid_mode_refuses_missing_gap_report_before_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            corpus = base / "covered.jsonl"
+            write_jsonl(corpus, [{"country": country, "date": f"{year}-01-01",
+                                  "word_count": 40, "speech_id": f"{country}-{year}",
+                                  "speech_text": "words " * 40,
+                                  "source_identifier": "source",
+                                  "source_url": "https://example.test/source"}
+                                 for country in ("Germany", "France", "Netherlands", "Italy", "Spain", "Poland")
+                                 for year in range(2018, 2026)])
+            with self.assertRaisesRegex(ValueError, "source-gap report is missing"):
+                run_pipeline(corpus=corpus, results_dir=base / "out", dry_run=False,
+                             confirm_paid_run=True, api_key="fake-key", model="pangram-4",
+                             price_per_1000_words=0.5, gap_reports=base / "missing.json")
             self.assertFalse((base / "out/raw_pangram").exists())
 
     def test_mock_dry_run_creates_outputs_for_all_six_countries(self):

@@ -45,7 +45,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="recorded human approval for source, processor, and transfer terms")
     parser.add_argument("--gap-report", type=Path, action="append",
                         default=[Path("data/manifests/spain_unavailable_journals.json"),
-                                 Path("data/manifests/germany_unavailable_protocols.json")],
+                                 Path("data/manifests/germany_unavailable_protocols.json"),
+                                 Path("data/manifests/poland_unavailable_statements.json")],
                         help="recorded official source gaps that must be empty before paid inference; repeatable")
     return parser
 
