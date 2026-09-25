@@ -24,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", type=Path, default=Path("data/manifests/source_manifest.jsonl"))
     parser.add_argument("--workers", type=int, default=4,
                         help="bounded parallel statement downloads for Poland")
+    parser.add_argument("--resume-partial", action="store_true",
+                        help="Poland only: validate and append to an existing .jsonl.tmp corpus")
     args = parser.parse_args(argv)
     output = args.output or Path("data/processed") / f"{args.country.lower()}_speeches.jsonl"
     opts = {"start_year": args.start_year, "end_year": args.end_year,
@@ -32,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.workers < 1:
             parser.error("--workers must be positive")
         opts["workers"] = args.workers
+        opts["resume_partial"] = args.resume_partial
+    elif args.resume_partial:
+        parser.error("--resume-partial is only supported for Poland")
     if args.country == "France":
         archives = download_france_archives(terms=tuple(args.terms), raw_dir=args.raw_dir, manifest_path=args.manifest)
         stats = build_france_corpus(archives, output, start_year=args.start_year, end_year=args.end_year)

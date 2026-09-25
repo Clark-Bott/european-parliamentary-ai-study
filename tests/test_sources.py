@@ -17,7 +17,8 @@ from parliament_ai_study.sources.netherlands import (audit_tweede_kamer_coverage
     iter_tweede_kamer_speeches, parse_tweede_kamer_xml, _odata_pages,
     _select_final_report)
 from unittest.mock import patch
-from parliament_ai_study.sources.sejm import audit_sejm_raw_coverage, download_sejm_date, parse_sejm_statement
+from parliament_ai_study.sources.sejm import (audit_sejm_raw_coverage, build_sejm_corpus,
+                                                download_sejm_date, parse_sejm_statement)
 from parliament_ai_study.sources.spain import (_has_journal, _html_full_text_available,
                                              parse_congreso_html, journal_url)
 from parliament_ai_study.sources.spain_pdf import _Chunk, _Line, parse_congreso_pdf
@@ -536,6 +537,47 @@ class NetherlandsParserTests(unittest.TestCase):
 
 
 class SejmParserTests(unittest.TestCase):
+    def test_resume_partial_validates_prefix_and_promotes_only_after_completion(self):
+        from parliament_ai_study.models import Speech
+
+        speeches = [Speech(country="Poland", parliament="Sejm", chamber="Sejm", date="2024-01-01",
+                           session_id="s", speech_id=f"s-{number}", speaker_id="",
+                           speaker_name="Member", speech_text=f"Words for record {number}.",
+                           source_url="https://example.test/source") for number in (1, 2, 3)]
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "poland.jsonl"
+            partial = target.with_suffix(".jsonl.tmp")
+            partial.write_text(json.dumps(speeches[0].to_dict(), sort_keys=True) + "\n",
+                               encoding="utf-8")
+            with patch("parliament_ai_study.sources.sejm.iter_sejm_speeches",
+                       side_effect=lambda **kwargs: iter(speeches)):
+                result = build_sejm_corpus(target, raw_dir=directory,
+                                           manifest_path=Path(directory) / "manifest.jsonl",
+                                           resume_partial=True)
+            self.assertEqual(result["records"], 3)
+            self.assertEqual([json.loads(line)["speech_id"] for line in target.read_text().splitlines()],
+                             ["s-1", "s-2", "s-3"])
+            self.assertFalse(partial.exists())
+
+    def test_resume_partial_rejects_divergent_prefix_without_modifying_file(self):
+        from parliament_ai_study.models import Speech
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "poland.jsonl"
+            partial = target.with_suffix(".jsonl.tmp")
+            content = '{"speech_id":"wrong","word_count":1}\n'
+            partial.write_text(content, encoding="utf-8")
+            speech = Speech(country="Poland", parliament="Sejm", chamber="Sejm", date="2024-01-01",
+                            session_id="s", speech_id="s-1", speaker_id="", speaker_name="Member",
+                            speech_text="Words for record one.", source_url="https://example.test/source")
+            with patch("parliament_ai_study.sources.sejm.iter_sejm_speeches",
+                       side_effect=lambda **kwargs: iter([speech])):
+                with self.assertRaisesRegex(ValueError, "diverges"):
+                    build_sejm_corpus(target, raw_dir=directory,
+                                      manifest_path=Path(directory) / "manifest.jsonl",
+                                      resume_partial=True)
+            self.assertEqual(partial.read_text(encoding="utf-8"), content)
+
     def test_extracts_polish_statement_and_keeps_raw_interruption_annotation(self):
         body = """<html lang='pl'><body><blockquote>
           <h1>10. kadencja, 1. posiedzenie, 1. dzień (13-11-2023)</h1>

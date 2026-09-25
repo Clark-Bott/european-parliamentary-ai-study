@@ -4,11 +4,12 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any, Iterator
 
-from ..io import write_jsonl
+from ..io import iter_jsonl, write_jsonl
 from ..models import Speech
 from .download import download_file
 
@@ -166,19 +167,65 @@ def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw") -> dict[str, Any]:
 def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                       terms: tuple[int, ...] = TERMS, raw_dir: str | Path = "data/raw",
                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
-                      workers: int = 4) -> dict[str, int | str]:
+                      workers: int = 4, resume_partial: bool = False) -> dict[str, int | str]:
     records = words = 0
 
-    def serialized():
-        nonlocal records, words
-        for speech in iter_sejm_speeches(start_year=start_year, end_year=end_year, terms=terms,
-                                         raw_dir=raw_dir, manifest_path=manifest_path,
-                                         workers=workers):
-            records += 1
-            words += speech.word_count
-            yield speech.to_dict()
+    if resume_partial:
+        target = Path(output_path)
+        partial = target.with_suffix(target.suffix + ".tmp")
+        if target.exists():
+            raise FileExistsError(f"complete Polish corpus already exists: {target}")
+        if not partial.is_file():
+            raise FileNotFoundError(f"no partial Polish corpus to resume: {partial}")
+        with partial.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            if stream.tell() == 0:
+                raise ValueError(f"partial corpus is empty: {partial}")
+            stream.seek(-1, os.SEEK_END)
+            if stream.read(1) != b"\n":
+                raise ValueError(f"partial corpus has an incomplete final line: {partial}")
 
-    write_jsonl(output_path, serialized())
+        def resumed():
+            nonlocal records, words
+            iterator = iter_sejm_speeches(start_year=start_year, end_year=end_year, terms=terms,
+                                         raw_dir=raw_dir, manifest_path=manifest_path,
+                                         workers=workers)
+            # Do not mutate the partial file unless every saved record matches
+            # the source-derived prefix in the same order and with the same text.
+            for saved in iter_jsonl(partial):
+                try:
+                    speech = next(iterator).to_dict()
+                except StopIteration as exc:
+                    raise ValueError("partial corpus exceeds the current source index") from exc
+                if speech != saved:
+                    raise ValueError(f"partial corpus diverges at {saved.get('speech_id')}")
+                records += 1
+                words += speech["word_count"]
+            # A validated prefix can now be extended in the existing file.
+            print(f"Resuming Poland after {records:,} verified records", flush=True)
+            with partial.open("a", encoding="utf-8", newline="\n") as stream:
+                for speech in iterator:
+                    record = speech.to_dict()
+                    stream.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+                    records += 1
+                    words += speech.word_count
+                    if records % 10000 == 0:
+                        print(f"Poland: {records:,} records", flush=True)
+            os.replace(partial, target)
+
+        resumed()
+    else:
+
+        def serialized():
+            nonlocal records, words
+            for speech in iter_sejm_speeches(start_year=start_year, end_year=end_year, terms=terms,
+                                             raw_dir=raw_dir, manifest_path=manifest_path,
+                                             workers=workers):
+                records += 1
+                words += speech.word_count
+                yield speech.to_dict()
+
+        write_jsonl(output_path, serialized())
     coverage_path = Path(manifest_path).parent / "poland_coverage_audit.json"
     coverage_path.parent.mkdir(parents=True, exist_ok=True)
     coverage_path.write_text(json.dumps(audit_sejm_raw_coverage(raw_dir), ensure_ascii=False, indent=2) + "\n",
@@ -196,12 +243,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", type=Path, default=Path("data/manifests/source_manifest.jsonl"))
     parser.add_argument("--workers", type=int, default=4,
                         help="bounded parallel statement-body downloads per sitting day")
+    parser.add_argument("--resume-partial", action="store_true",
+                        help="validate and append to an existing .jsonl.tmp corpus")
     args = parser.parse_args(argv)
     if args.workers < 1:
         parser.error("--workers must be positive")
     stats = build_sejm_corpus(args.output, start_year=args.start_year, end_year=args.end_year,
                               raw_dir=args.raw_dir, manifest_path=args.manifest,
-                              workers=args.workers)
+                              workers=args.workers, resume_partial=args.resume_partial)
     print(json.dumps({"country": "Poland", "output": str(args.output), **stats}, ensure_ascii=False, indent=2))
     return 0
 
