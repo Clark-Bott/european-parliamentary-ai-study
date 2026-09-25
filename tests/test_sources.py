@@ -538,6 +538,10 @@ class NetherlandsParserTests(unittest.TestCase):
 
 
 class SejmParserTests(unittest.TestCase):
+    def test_sejm_acquisition_rejects_future_cutoff(self):
+        with self.assertRaisesRegex(ValueError, "in the future"):
+            list(iter_sejm_speeches(through_date="2099-01-01"))
+
     def test_sejm_index_skips_future_dates_and_placeholder_sittings(self):
         index = [{"number": 1, "dates": ["2024-01-02", "2024-01-03"]},
                  {"number": 0, "dates": ["2024-01-01"]}]

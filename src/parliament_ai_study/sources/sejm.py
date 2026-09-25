@@ -22,6 +22,13 @@ _STAGE_PARAGRAPH = re.compile(
 )
 
 
+def _cutoff(through_date: str | None) -> date:
+    cutoff = date.fromisoformat(through_date) if through_date else date.today()
+    if cutoff > date.today():
+        raise ValueError(f"Sejm acquisition cutoff is in the future: {cutoff}")
+    return cutoff
+
+
 class _ParagraphText(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -132,7 +139,7 @@ def iter_sejm_speeches(*, start_year: int = 2018, end_year: int = 2026,
                         manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
                         workers: int = 4, through_date: str | None = None) -> Iterator[Speech]:
     """Fetch all plenary statement bodies in the requested years; resumable via raw-file cache."""
-    cutoff = date.fromisoformat(through_date) if through_date else date.today()
+    cutoff = _cutoff(through_date)
     for term in terms:
         list_url = f"{API}/term{term}/proceedings"
         list_path = Path(raw_dir) / "poland" / f"term-{term}" / "proceedings.json"
@@ -152,7 +159,7 @@ def iter_sejm_speeches(*, start_year: int = 2018, end_year: int = 2026,
 def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw", *,
                             through_date: str | None = None) -> dict[str, Any]:
     """Reconcile every 2018–2026 indexed sitting date with its spoken bodies."""
-    cutoff = date.fromisoformat(through_date) if through_date else date.today()
+    cutoff = _cutoff(through_date)
     terms = []
     missing: list[dict[str, Any]] = []
     for term in TERMS:
@@ -223,7 +230,7 @@ def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_ye
                       workers: int = 4, resume_partial: bool = False,
                       through_date: str | None = None) -> dict[str, int | str]:
     records = words = 0
-    cutoff = date.fromisoformat(through_date).isoformat() if through_date else date.today().isoformat()
+    cutoff = _cutoff(through_date).isoformat()
 
     if resume_partial:
         target = Path(output_path)
