@@ -6,7 +6,7 @@ Research question: How has the prevalence of AI-generated or AI-assisted text in
 
 The project is motivated by The Economist's September 2026 article, “AI-written speeches are taking over politics.” The article body was recovered on 2026-09-24 through a syndicated reprint, which confirms Pangram as the detector and a word-weighted UK headline metric; the Pangram model, thresholds, date range, speech definition, and any source note, code, or data release remain unavailable. This is therefore a comparative extension, not an exact replication. See [the reconstruction ledger](docs/economist_replication.md).
 
-## Current status — be precise
+## Current status
 
 ```text
 DATA COLLECTION:        SIX LOCAL CORPORA BUILT through country-specific cutoffs; Polish raw coverage complete through 2026-09-25; German post-archive sittings not incorporated
@@ -98,7 +98,3 @@ The observation is intended to be an individually attributed substantive plenary
 ## Output and data policy
 
 Source licenses and terms must be reviewed before redistribution or paid processing. Raw archives and derived JSONL are excluded from Git. The manifests document verified local French, German, Italian, Dutch, and Spanish builds; a new clone must reacquire them. Country-level historical corpus statistics are not six-country research results.
-
-## Repository status
-
-This is an active research-engineering project, not a completed empirical study. Five country-level corpora have local builds, but the combined corpus is not validated, Germany retains a post-cutoff source gap, Spain still needs source-boundary and rights review, and Poland is still acquiring. There is no detector-based evidence about AI adoption rates in any chamber. The research-credit status summary is in [docs/pangram_research_request.md](docs/pangram_research_request.md) and intentionally documents the unfinished corpus work rather than claiming the six-country study is ready.
