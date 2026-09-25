@@ -23,6 +23,7 @@ from datetime import date
 from html.parser import HTMLParser
 import argparse
 import hashlib
+import heapq
 import json
 import re
 import time
@@ -72,7 +73,7 @@ def normalize(text: str) -> str:
 
 
 def _loose(text: str) -> str:
-    """Alphanumeric-only form, tolerant of °/o, hyphenation, and quotes."""
+    """Alphanumeric-only form, tolerant of hyphenation and quote styles."""
     return re.sub(r"[^0-9a-zà-öø-ÿ]+", "", normalize(text))
 
 
@@ -80,7 +81,7 @@ def containment_status(record_text: str, source_text: str) -> str:
     """verified, normalized, partial, or mismatch for one record/source pair.
 
     ``normalized`` means the text is present once punctuation spacing and
-    decorative characters are ignored (for example ``n°`` against ``no``).
+    decorative characters are ignored (for example a curly versus a straight apostrophe).
     """
     needle, haystack = normalize(record_text), normalize(source_text)
     if not needle:
@@ -111,39 +112,41 @@ def containment_status(record_text: str, source_text: str) -> str:
 
 
 def sample_records(corpus: Path, country: str, count: int, seed: int) -> list[dict[str, Any]]:
-    """Deterministic sample, balanced across the years present for a country."""
-    by_year: dict[int, list[dict[str, Any]]] = {}
-    total = 0
-    for record in iter_jsonl(corpus):
+    """Select from all records, not just the first sessions in each year."""
+    if count < 1:
+        raise ValueError("sample count must be positive")
+    by_year: dict[int, list[tuple[int, str, int, dict[str, Any]]]] = {}
+    for position, record in enumerate(iter_jsonl(corpus)):
         if record.get("country") != country:
             continue
-        total += 1
         try:
             year = date.fromisoformat(str(record.get("date", ""))).year
         except ValueError:
             continue
+        speech_id = str(record.get("speech_id", ""))
+        rank = int.from_bytes(hashlib.sha256(f"{seed}|{speech_id}".encode("utf-8")).digest(), "big")
+        # Python's min-heap holds the worst (largest rank) at index 0.
+        entry = (-rank, speech_id, position, record)
         bucket = by_year.setdefault(year, [])
-        if len(bucket) < 64:
-            bucket.append(record)
-    if total == 0:
+        if len(bucket) < count:
+            heapq.heappush(bucket, entry)
+        elif entry[:3] > bucket[0][:3]:
+            heapq.heapreplace(bucket, entry)
+    if not by_year:
         return []
     years = sorted(by_year)
-    quota = max(1, count // max(1, len(years)))
+    quota = count // len(years)
     picked: list[dict[str, Any]] = []
     for year in years:
-        bucket = sorted(by_year[year], key=lambda row: str(row.get("speech_id", "")))
-        # SHA-256 ordering keeps the sample repeatable across runs and machines.
-        bucket.sort(key=lambda row: hashlib.sha256(
-            f"{seed}|{row.get('speech_id', '')}".encode("utf-8")).hexdigest())
-        picked.extend(bucket[:quota])
+        bucket = sorted(by_year[year], key=lambda entry: (-entry[0], entry[1], entry[2]))
+        picked.extend(entry[3] for entry in bucket[:quota])
     if len(picked) < count:
         chosen_ids = {row.get("speech_id") for row in picked}
         remainder = sorted(
-            (row for rows in by_year.values() for row in rows
-             if row.get("speech_id") not in chosen_ids),
-            key=lambda row: hashlib.sha256(
-                f"{seed}|{row.get('speech_id', '')}".encode("utf-8")).hexdigest())
-        picked.extend(remainder[:count - len(picked)])
+            (entry for rows in by_year.values() for entry in rows
+             if entry[3].get("speech_id") not in chosen_ids),
+            key=lambda entry: (-entry[0], entry[1], entry[2]))
+        picked.extend(entry[3] for entry in remainder[:count - len(picked)])
     return picked[:count]
 
 
@@ -170,7 +173,11 @@ def _source_payload(record: dict[str, Any], *, timeout: float,
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
             return "http", None, f"fetch failed: {exc}"
     if source_type == "cpp_bt_cc0_speech_csv":
-        archive = source_archive or _locate("CPP-BT_*_Reden_Gesamt.zip")
+        archive = source_archive
+        if archive is None and "22844952" in str(record.get("source_url", "")):
+            archive = _locate("CPP-BT_2026-09-19_DE_CSV_Reden_Gesamt.zip")
+        if archive is None:
+            archive = _locate("CPP-BT_*_Reden_Gesamt.zip")
         if archive is None or not archive.is_file():
             return "local-archive", None, "CPP-BT archive not present locally"
         return "local-archive", str(archive), None

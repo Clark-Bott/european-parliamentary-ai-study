@@ -1,26 +1,15 @@
 {
-  "method": "parliament_ai_study.review --verify (deterministic seed 2026 sample, containment of normalized speech_text in the record's own official source)",
+  "method": "parliament_ai_study.review --verify (seed 2026; full-file per-year SHA-256 sample; source-text containment)",
+  "sampler_correction": "2026-09-25: replaced first-64-records-per-year sampling with bounded full-year SHA-256 ranking; all five checks below were rerun.",
   "statuses": {
-    "verified": "record text found verbatim after whitespace/case folding",
-    "normalized": "found after ignoring punctuation spacing, decorative characters, and apostrophe style",
-    "partial": "every substantial segment found; inline material removed by cleaning (audience cues, page markers) accounts for the difference",
-    "mismatch": "record text not located in the source; requires manual investigation",
-    "skipped": "source not retrievable by this tool"
+    "verified": "speech text found verbatim after whitespace/case folding",
+    "normalized": "found after ignoring punctuation spacing and decorative characters",
+    "partial": "substantial segments found despite removed inline cues/page markers; review context manually",
+    "mismatch": "strict/loose/segment checks failed; investigate in official source",
+    "skipped": "source not retrievable"
   },
-  "limitation": "10 records per country is a screening sample, not a completed manual audit. A human must still read sampled records against the official page.",
+  "limitation": "10 per country is a small automated screening sample, not manual QA sign-off; speaker and date attribution require review.",
   "countries": {
-    "France": {
-      "sampled": 10,
-      "seed": 2026,
-      "status_counts": {
-        "normalized": 4,
-        "verified": 6
-      },
-      "transport": [
-        "local-archive"
-      ],
-      "unresolved": []
-    },
     "Germany": {
       "sampled": 10,
       "seed": 2026,
@@ -32,7 +21,7 @@
       ],
       "unresolved": []
     },
-    "Italy": {
+    "France": {
       "sampled": 10,
       "seed": 2026,
       "status_counts": {
@@ -40,7 +29,7 @@
         "verified": 6
       },
       "transport": [
-        "http"
+        "local-archive"
       ],
       "unresolved": []
     },
@@ -55,17 +44,48 @@
       ],
       "unresolved": []
     },
-    "Spain": {
+    "Italy": {
       "sampled": 10,
       "seed": 2026,
       "status_counts": {
-        "verified": 7,
-        "partial": 3
+        "normalized": 2,
+        "verified": 8
       },
       "transport": [
         "http"
       ],
       "unresolved": []
+    },
+    "Spain": {
+      "sampled": 10,
+      "seed": 2026,
+      "status_counts": {
+        "verified": 4,
+        "normalized": 2,
+        "partial": 3,
+        "mismatch": 1
+      },
+      "transport": [
+        "http"
+      ],
+      "unresolved": [
+        {
+          "country": "Spain",
+          "date": "2023-03-09",
+          "speech_id": "congreso-14-PL-251:turn-0112",
+          "speaker_name": "PRESIDENTA",
+          "source_url": "https://www.congreso.es/busqueda-de-intervenciones?p_p_id=intervenciones&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&_intervenciones_mode=mostrarTextoIntegro&_intervenciones_legislatura=XIV&_intervenciones_id_texto=(DSCD-14-PL-251.CODI.)",
+          "transport": "http",
+          "status": "mismatch",
+          "detail": null
+        }
+      ],
+      "manual_follow_up": [
+        {
+          "speech_id": "congreso-14-PL-251:turn-0112",
+          "observation": "Live official Diario contains the chair turn and its exact voting totals (346 votes, 202 for, 122 against, 22 abstentions). The parser removed the inline (Pausa) cue, leaving a double full stop; automatic containment marks a mismatch. At 26 words this procedural turn is below the 40-word inference threshold. Speaker/date review of the whole record remains open."
+        }
+      ]
     }
   }
 }

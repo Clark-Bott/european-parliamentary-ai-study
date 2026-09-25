@@ -2,7 +2,7 @@
 
 Screening check that parsed records really occur in their official source.
 Tool: `python -m parliament_ai_study.review --verify`. Method: take a
-deterministic sample (seed 2026, balanced across years), retrieve each
+deterministic full-file SHA-256 sample (seed 2026, balanced across years), retrieve each
 record's own source, and test whether the normalized `speech_text` occurs in
 it.
 
@@ -11,8 +11,8 @@ it.
 | Germany | 10 | 10 | 0 | 0 | 0 | 0 |
 | France | 10 | 6 | 4 | 0 | 0 | 0 |
 | Netherlands | 10 | 10 | 0 | 0 | 0 | 0 |
-| Italy | 10 | 6 | 4 | 0 | 0 | 0 |
-| Spain | 10 | 7 | 0 | 3 | 0 | 0 |
+| Italy | 10 | 8 | 2 | 0 | 0 | 0 |
+| Spain | 10 | 4 | 2 | 3 | 1 | 0 |
 | Poland | — | not run; acquisition still running | | | | |
 
 Status meanings are recorded in
@@ -27,6 +27,23 @@ Status meanings are recorded in
 - **mismatch** — not located; must be investigated before the corpus is used.
 - **skipped** — source not retrievable by this tool.
 
+**Sampler correction, 2026-09-25:** The first screening implementation
+selected only from the first 64 records of each year. That is not a random
+sample of a year's corpus. The sampler now ranks all records in each year by
+SHA-256 while retaining only the best candidates in memory. All five
+country checks in the table above were rerun with the corrected method;
+the earlier counts are superseded.
+
+**Spanish follow-up:** The one automatic mismatch is
+`congreso-14-PL-251:turn-0112` (2023-03-09, 26 words). Inspection of the
+official Diario page located the chair's intervention and the exact voting
+totals (346 votes, 202 for, 122 against, 22 abstentions). The parser removes
+the inline `(Pausa)` cue, leaving a double full stop; the automated substring
+check cannot join the two sides of the deletion. This procedural turn is below
+the 40-word inference threshold. The result remains a mismatch in the
+machine-readable report; a full human speaker/date and boundary review has
+not been signed off.
+
 Transport per country: Germany and France are checked against the local
 official bulk archives (the CC0 CPP-BT CSV and the Syceron ZIPs) because
 their `source_url` values are a DOI and a bulk ZIP rather than a per-record
@@ -35,8 +52,10 @@ URL stored on each record.
 
 ## What this does and does not establish
 
-It establishes that sampled records exist, in the stated form, in the
-official source — no invented, merged, or truncated text in this sample.
+It provides screening evidence that most sampled records' text occurs in
+their stated official source. The Spanish automatic mismatch was located
+manually and is still visible in the report. This check is not evidence that
+every record has the right speaker or date or that the corpus is complete.
 
 It does **not** complete Phase 4 validation. Ten records per country is a
 screening sample. Still outstanding for every country: a human reading of a

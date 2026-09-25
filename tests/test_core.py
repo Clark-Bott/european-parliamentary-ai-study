@@ -1,5 +1,6 @@
 from collections import Counter
 from io import BytesIO
+import hashlib
 import json
 import tempfile
 import unittest
@@ -687,6 +688,19 @@ class SourceBoundaryReviewTests(unittest.TestCase):
             self.assertEqual(len(first), 6)
             self.assertEqual({row["date"][:4] for row in first}, {"2018", "2021", "2024"})
             self.assertEqual(sample_records(corpus, "France", 5, 2026), [])
+
+    def test_source_review_sampling_ranks_the_entire_year(self):
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "c.jsonl"
+            records = [{"country": "Germany", "date": "2024-01-01",
+                        "speech_id": f"speech-{i:03d}"} for i in range(200)]
+            write_jsonl(corpus, records)
+            expected = sorted(records, key=lambda record: hashlib.sha256(
+                f"2026|{record['speech_id']}".encode("utf-8")).hexdigest())[:10]
+            actual = sample_records(corpus, "Germany", 10, 2026)
+            self.assertEqual([row["speech_id"] for row in actual],
+                             [row["speech_id"] for row in expected])
+            self.assertTrue(any(int(row["speech_id"].split("-")[1]) >= 64 for row in actual))
 
 
     def test_max_cost_cap_refuses_a_run_over_the_limit(self):
