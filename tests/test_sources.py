@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from http.client import IncompleteRead
+from urllib.error import HTTPError
 from zipfile import ZipFile
+
+import httpx
 
 from parliament_ai_study.sources.download import download_file, file_manifest_entry
 from parliament_ai_study.sources.france import parse_france_xml
@@ -18,8 +21,9 @@ from parliament_ai_study.sources.netherlands import (audit_tweede_kamer_coverage
     _select_final_report)
 from unittest.mock import patch
 from parliament_ai_study.sources.sejm import (audit_sejm_raw_coverage, build_sejm_corpus,
-                                                download_sejm_date, iter_sejm_speeches,
-                                                parse_sejm_statement)
+                                                 download_sejm_date, iter_sejm_speeches,
+                                                 parse_sejm_statement, _cached_download,
+                                                 _pooled_opener)
 from parliament_ai_study.sources.monitor_sejm import CorpusTail, _last_day_bodies, target_days
 from parliament_ai_study.sources.spain import (_has_journal, _html_full_text_available,
                                              parse_congreso_html, journal_url)
@@ -577,6 +581,52 @@ class NetherlandsParserTests(unittest.TestCase):
 
 
 class SejmParserTests(unittest.TestCase):
+    def test_pooled_sejm_download_preserves_atomic_hash_and_cache(self):
+        calls = []
+        body = b"<p>Official statement</p>"
+
+        def handle(request):
+            calls.append((request.method, request.url.path))
+            return httpx.Response(200, headers={"Content-Length": str(len(body)),
+                                                 "Content-Type": "text/html"},
+                                  stream=httpx.ByteStream(body))
+
+        with tempfile.TemporaryDirectory() as directory, httpx.Client(
+                transport=httpx.MockTransport(handle)) as client:
+            with patch("parliament_ai_study.sources.sejm._get_client", return_value=client):
+                dest = Path(directory) / "statement.html"
+                manifest = Path(directory) / "manifest.jsonl"
+                url = "https://api.sejm.gov.pl/sejm/term10/proceedings/1/2023-11-13/transcripts/1"
+                self.assertEqual(_cached_download(url, dest, manifest), body)
+                self.assertEqual(_cached_download(url, dest, manifest), body)
+            self.assertEqual(len(calls), 1)
+            self.assertFalse(dest.with_suffix(".html.tmp").exists())
+            entry = json.loads(manifest.read_text().splitlines()[0])
+            self.assertEqual(entry["sha256"], hashlib.sha256(body).hexdigest())
+            self.assertEqual(entry["source_url"], url)
+
+    def test_pooled_sejm_download_rejects_http_and_incomplete_body(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "statement.html"
+            manifest = root / "manifest.jsonl"
+            url = "https://api.sejm.gov.pl/statement"
+            with httpx.Client(transport=httpx.MockTransport(
+                    lambda _: httpx.Response(404))) as client:
+                with patch("parliament_ai_study.sources.sejm._get_client", return_value=client):
+                    with self.assertRaises(HTTPError):
+                        download_file(url, target, manifest_path=manifest, use_range=False,
+                                      opener=_pooled_opener, retries=1)
+            with httpx.Client(transport=httpx.MockTransport(
+                    lambda _: httpx.Response(200, headers={"Content-Length": "20"},
+                                             stream=httpx.ByteStream(b"short")))) as client:
+                with patch("parliament_ai_study.sources.sejm._get_client", return_value=client):
+                    with self.assertRaises(IncompleteRead):
+                        download_file(url, target, manifest_path=manifest, use_range=False,
+                                      opener=_pooled_opener, retries=1)
+            self.assertFalse(target.exists())
+            self.assertFalse(manifest.exists())
+
     def test_monitor_counts_only_complete_lines_and_survives_final_promotion(self):
         with tempfile.TemporaryDirectory() as directory:
             partial = Path(directory) / "poland.jsonl.tmp"

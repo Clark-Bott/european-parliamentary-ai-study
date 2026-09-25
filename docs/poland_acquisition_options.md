@@ -42,12 +42,22 @@ statement matched byte-for-byte through both routes; the range route took
 **not** a demonstrated corpus-wide speedup. The existing writer must stop
 before a new process can use this change; never run two writers concurrently.
 
-The earlier writer was stopped after its partial file was confirmed to end
-with a complete JSONL line. A single writer was then restarted using
-`--resume-partial --through-date 2026-09-25 --workers 4`; it validates the
-saved prefix before appending. The log for this run is
-`/tmp/opencode/poland-resume-single-get.log`. No claim of a faster sustained
-rate is made until this resumed run has produced measurable new files.
+The first resumed writer (`--workers 4`) stopped on a transient DNS failure
+after 67,433 speeches had been saved. Its prefix was preserved. A new 4-worker
+writer validated the prefix, resumed, and was stopped cleanly for a further
+network change; the partial file still ended in a complete JSONL line.
+The current single writer uses `--resume-partial --through-date 2026-09-25
+--workers 12` and logs to `/tmp/opencode/poland-resume-pooled-12.log`.
+The Sejm adapter now reuses at most 12 HTTP/1.1 keep-alive connections across
+statement and day requests, while keeping plain GETs, per-file atomic writes,
+response-length checks, retries, SHA-256 hashes, and append-only provenance.
+Transient request errors now have up to eight bounded attempts (previously
+three); no verification or reuse term is bypassed. A six-request sequential
+comparison against *previously cached official statement URLs* took 4.72 s
+with fresh `urllib` connections versus 2.55 s with a pooled HTTP client.
+This small diagnostic does **not** establish a 10× sustained rate, and 12
+workers increase load on the official API; watch for throttling or failures.
+The PDF route still has no validated speaker-boundary parser.
 
 Do not represent a cached day or a fetched PDF as a completed, validated
 speech corpus. The Polish gap report and human source-boundary check remain

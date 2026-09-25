@@ -9,7 +9,7 @@ The project is motivated by The Economist's September 2026 article, “AI-writte
 ## Current status — be precise
 
 ```text
-DATA COLLECTION:        IN PROGRESS — five corpora built locally; Polish downloader paused on a network error with a preserved partial corpus; post-archive German protocols not yet incorporated (newest protocol partial)
+DATA COLLECTION:        IN PROGRESS — five corpora built locally; Polish downloader resumed from its verified partial corpus with pooled connections and 12 workers; post-archive German protocols not yet incorporated (newest protocol partial)
 PARSING:                COMPLETE for Germany, France, Netherlands, Italy, Spain; Poland parser implemented, full build pending
 NORMALIZATION:          COMPLETE for the five built corpora; common schema, source URLs, and source-language text retained
 VALIDATION:             PARTIAL — automated full-file integrity QA passed for all five built corpora; corrected full-file 10-record screening found one Spanish automatic mismatch (inline-cue deletion, located in source); human sample reading still outstanding
@@ -56,9 +56,9 @@ To watch an existing Polish acquisition **without starting a second downloader**
 uv run --python 3.12 python -m parliament_ai_study.sources.monitor_sejm
 ```
 
-Add `--once` for a single snapshot or `--offline` to avoid fetching a missing sitting-day index from the public Sejm API. The Rich bars count cached **sitting-day metadata**, not completed speeches or validated coverage; the display separately shows flushed records, the latest record, and bodies cached for its day. The monitor does not change the partial corpus or provenance manifest. The most recent acquisition used a pinned `--through-date 2026-09-25` and stopped after a network error; its validated partial file remains. Inspect `/tmp/opencode/poland-resume-single-get.log` before resuming; only one writer may run at a time.
+Add `--once` for a single snapshot or `--offline` to avoid fetching a missing sitting-day index from the public Sejm API. The Rich bars count cached **sitting-day metadata**, not completed speeches or validated coverage; the display separately shows flushed records, the latest record, and bodies cached for its day. The monitor does not change the partial corpus or provenance manifest. After a transient DNS failure, the old writer was restarted, stopped cleanly for a downloader change, and restarted again from the preserved prefix with `--resume-partial --through-date 2026-09-25 --workers 12`. Its log is `/tmp/opencode/poland-resume-pooled-12.log`. Only one writer may run at a time; do not reconcile the live provenance manifest while it runs.
 
-Poland has an [official whole-day stenographic PDF archive](docs/poland_acquisition_options.md). The current corpus uses the separately numbered HTML statements for trustworthy speaker boundaries. The resumed Sejm downloader uses one plain HTTP GET per small file rather than a redundant byte-range probe. Do not switch to PDF extraction or a third-party corpus without a new parser and source-boundary QA.
+Poland has an [official whole-day stenographic PDF archive](docs/poland_acquisition_options.md). The current corpus uses the separately numbered HTML statements for trustworthy speaker boundaries. The resumed Sejm downloader uses one plain HTTP GET per small file and reuses HTTPS connections; a small read-only timing comparison favored pooling, but no sustained 10× corpus-wide speedup has been established. Do not switch to PDF extraction or a third-party corpus without a new parser and source-boundary QA.
 
 Run tests with:
 

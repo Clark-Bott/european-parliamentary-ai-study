@@ -1,6 +1,7 @@
 """Polish Sejm API transcript acquisition and normalization."""
 from __future__ import annotations
 
+import atexit
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from html.parser import HTMLParser
@@ -8,18 +9,83 @@ import json
 import os
 from pathlib import Path
 import re
+import threading
 from typing import Any, Iterator
+from urllib.error import HTTPError, URLError
+from urllib.request import Request
+
+import httpx
 
 from ..io import iter_jsonl, write_jsonl
 from ..models import Speech
-from .download import download_file
+from .download import USER_AGENT, download_file
 
 API = "https://api.sejm.gov.pl/sejm"
 TERMS = (8, 9, 10)
+_client: httpx.Client | None = None
+_client_lock = threading.Lock()
 _STAGE_PARAGRAPH = re.compile(
     r"^\(?\s*(?:głos z sali|oklaski|protesty|protest|wesołość|poruszenie|brawa)(?:\s*:.*?)?\s*[.!]?\)?$",
     re.IGNORECASE,
 )
+
+
+def _get_client() -> httpx.Client:
+    """Reuse HTTPS/TLS connections across statement tasks and sitting days."""
+    global _client
+    with _client_lock:
+        if _client is None:
+            _client = httpx.Client(
+                headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"},
+                limits=httpx.Limits(max_connections=12, max_keepalive_connections=12,
+                                    keepalive_expiry=30),
+                follow_redirects=True,
+            )
+            atexit.register(_client.close)
+        return _client
+
+
+class _PooledResponse:
+    def __init__(self, response: httpx.Response):
+        self.response = response
+        self.status = response.status_code
+        self.headers = response.headers
+        self._chunks: Iterator[bytes] | None = None
+
+    def __enter__(self) -> _PooledResponse:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.response.close()
+
+    def read(self, size: int = 1024 * 1024) -> bytes:
+        if self._chunks is None:
+            self._chunks = self.response.iter_raw(chunk_size=size)
+        try:
+            return next(self._chunks, b"")
+        except httpx.RequestError as exc:
+            raise URLError(exc) from exc
+
+
+def _pooled_opener(request: Request, timeout: float) -> _PooledResponse:
+    """Adapt keep-alive streams to the existing atomic download helper."""
+    client = _get_client()
+    try:
+        response = client.send(
+            client.build_request(request.get_method(), request.full_url,
+                                 headers=dict(request.header_items()), timeout=timeout),
+            stream=True,
+        )
+    except httpx.RequestError as exc:
+        raise URLError(exc) from exc
+    if response.status_code >= 400:
+        response.close()
+        raise HTTPError(request.full_url, response.status_code, response.reason_phrase,
+                        response.headers, None)
+    if response.headers.get("Content-Encoding", "identity").lower() != "identity":
+        response.close()
+        raise URLError("Sejm returned unexpected compressed source bytes")
+    return _PooledResponse(response)
 
 
 def _cutoff(through_date: str | None) -> date:
@@ -101,7 +167,8 @@ def _cached_download(url: str, destination: Path, manifest_path: str | Path) -> 
         # small. A ranged probe plus the full range otherwise costs two HTTP
         # round trips for each statement; the plain GET still streams to an
         # atomic file and records the same hash/URL provenance.
-        download_file(url, destination, manifest_path=manifest_path, use_range=False)
+        download_file(url, destination, manifest_path=manifest_path, use_range=False,
+                      opener=_pooled_opener, retries=8)
     return destination.read_bytes()
 
 
@@ -275,7 +342,7 @@ def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_ye
                     stream.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
                     records += 1
                     words += speech.word_count
-                    if records % 10000 == 0:
+                    if records % 1000 == 0:
                         print(f"Poland: {records:,} records", flush=True)
             os.replace(partial, target)
 

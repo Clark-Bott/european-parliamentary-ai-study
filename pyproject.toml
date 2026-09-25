@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Reproducible multilingual parliamentary AI-writing study"
 requires-python = ">=3.11"
 dependencies = [
+    "httpx>=0.28,<1",
     "pypdf==6.1.1",
     "rich>=14,<15",
 ]
