@@ -42,6 +42,13 @@ statement matched byte-for-byte through both routes; the range route took
 **not** a demonstrated corpus-wide speedup. The existing writer must stop
 before a new process can use this change; never run two writers concurrently.
 
+The earlier writer was stopped after its partial file was confirmed to end
+with a complete JSONL line. A single writer was then restarted using
+`--resume-partial --through-date 2026-09-25 --workers 4`; it validates the
+saved prefix before appending. The log for this run is
+`/tmp/opencode/poland-resume-single-get.log`. No claim of a faster sustained
+rate is made until this resumed run has produced measurable new files.
+
 Do not represent a cached day or a fetched PDF as a completed, validated
 speech corpus. The Polish gap report and human source-boundary check remain
 required before any paid inference.

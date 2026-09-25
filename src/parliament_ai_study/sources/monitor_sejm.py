@@ -134,7 +134,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Watch Sejm acquisition (read-only)")
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw/poland"))
     parser.add_argument("--corpus", type=Path, default=Path("data/processed/poland_speeches.jsonl"))
-    parser.add_argument("--log", type=Path, default=Path("/tmp/opencode/poland-resume.log"))
+    parser.add_argument("--log", type=Path,
+                        default=Path("/tmp/opencode/poland-resume-single-get.log"))
     parser.add_argument("--through-date", type=date.fromisoformat, default=date.today(),
                         help="latest sitting day to count; defaults to today")
     parser.add_argument("--interval", type=float, default=5.0, help="seconds between refreshes")
