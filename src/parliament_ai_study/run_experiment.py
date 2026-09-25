@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 from pathlib import Path
 import sys
 
 from .cost import estimate_cost
 from .io import iter_jsonl
-from .pipeline import run_pipeline
+from .pipeline import run_api_test, run_pipeline
 from .sources.build import build_six_country_corpus
 
 
@@ -28,13 +29,18 @@ def load_dotenv(path: Path = Path(".env")) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="European parliamentary AI-writing study pipeline")
     parser.add_argument("--dry-run", action="store_true", help="run the full pipeline with deterministic mock results; never call Pangram")
+    parser.add_argument("--test-api", action="store_true", help="one short synthetic paid API task only; no parliamentary data or plots")
     parser.add_argument("--corpus", type=Path, default=Path("data/processed/speeches.jsonl"))
     parser.add_argument("--results-dir", type=Path, default=Path("results"))
     parser.add_argument("--model", default=None, help="explicit Pangram model selector; defaults to PANGRAM_MODEL or pangram-4")
     parser.add_argument("--price-per-1000-words", type=float, default=None)
     parser.add_argument("--confirm-paid-run", action="store_true", help="required explicit authorization for paid inference")
     parser.add_argument("--max-cost", type=float, default=None,
-                        help="refuse any run whose estimate exceeds this USD amount")
+                         help="refuse any run whose estimate exceeds this USD amount")
+    parser.add_argument("--sample-budget", type=float, default=None,
+                        help="USD ceiling including optional controls; draw a weighted country-month sample (full paid-run guards still apply)")
+    parser.add_argument("--sample-seed", type=int, default=2026,
+                        help="reproducible country-month sample seed (default: 2026)")
     parser.add_argument("--estimate-only", action="store_true", help="print cost table and exit without inference or analysis")
     parser.add_argument("--build-corpus", action="store_true", help="acquire/rebuild missing country corpora before a dry run or estimate")
     parser.add_argument("--country", help="optional country filter for --estimate-only")
@@ -59,10 +65,24 @@ def main(argv: list[str] | None = None) -> int:
     price = args.price_per_1000_words
     if price is None:
         price = float(os.environ.get("PANGRAM_PRICE_PER_1000_WORDS", "0.50"))
-    if price < 0:
-        raise SystemExit("price must be non-negative")
+    if not math.isfinite(price) or price < 0:
+        raise SystemExit("price must be finite and non-negative")
+    if args.test_api:
+        if args.dry_run or args.estimate_only or args.build_corpus or args.sample_budget is not None:
+            raise SystemExit("--test-api cannot be combined with dry-run, estimate-only, build-corpus or sampling")
+        summary = run_api_test(results_dir=args.results_dir, model=model,
+                               api_key=os.environ.get("PANGRAM_API_KEY"),
+                               confirm_paid_run=args.confirm_paid_run,
+                               price_per_1000_words=price,
+                               max_cost=0.05 if args.max_cost is None else args.max_cost)
+        print(f"Synthetic API check completed: {summary['stage']}; not research data. "
+              f"Estimated ceiling ${summary['estimated_max_cost_usd']:.4f}; "
+              f"record at {args.results_dir / 'api_test' / 'test_result.json'}")
+        return 0
     if args.dry_run and args.confirm_paid_run:
         raise SystemExit("--dry-run and --confirm-paid-run cannot be combined")
+    if args.estimate_only and args.sample_budget is not None:
+        raise SystemExit("--sample-budget requires a pipeline run; --estimate-only reports the full-corpus estimate")
     if not args.dry_run and not args.estimate_only and not args.confirm_paid_run:
         raise SystemExit("refusing paid inference without --confirm-paid-run")
     if args.build_corpus or (not args.dry_run and not args.corpus.is_file()):
@@ -93,7 +113,8 @@ def main(argv: list[str] | None = None) -> int:
                            api_key=os.environ.get("PANGRAM_API_KEY"),
                            gap_reports=args.gap_report,
                            processing_approval=args.processing_approval,
-                           max_cost=args.max_cost)
+                            max_cost=args.max_cost, sample_budget=args.sample_budget,
+                            sample_seed=args.sample_seed)
     print(f"Pipeline complete: {summary['results_dir']}")
     mode = "synthetic smoke test" if summary["synthetic_smoke_test"] else (
         "real corpus / MOCKED detector responses" if summary["mocked"] else "Pangram inference")

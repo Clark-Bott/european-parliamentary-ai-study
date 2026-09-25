@@ -144,7 +144,7 @@ def aggregate_results(
 ) -> list[dict[str, Any]]:
     """Return word- and speech-weighted AI/mixed shares grouped by country and time."""
     groups: dict[tuple[str, str], dict[str, float]] = defaultdict(
-        lambda: {"speeches": 0, "words": 0, "ai_words": 0.0, "mixed_words": 0.0,
+        lambda: {"speeches": 0, "sampled_speeches": 0, "words": 0, "ai_words": 0.0, "mixed_words": 0.0,
                 "ai_speech_sum": 0.0, "mixed_speech_sum": 0.0})
     for speech in speeches:
         get = speech.get if isinstance(speech, dict) else lambda key, default=None: getattr(speech, key, default)
@@ -160,22 +160,27 @@ def aggregate_results(
         speech_id = str(get("speech_id", ""))
         response = responses(speech) if callable(responses) else responses[speech_id]
         ai, mixed = response_shares(response, speech_id)
-        ai_words = words * ai
-        mixed_words = words * mixed
+        weight = float(get("sampling_weight", 1))
+        if not 0 < weight < float("inf"):
+            raise ValueError(f"invalid sampling weight for {speech_id}")
+        ai_words = words * weight * ai
+        mixed_words = words * weight * mixed
         day = date.fromisoformat(str(get("date")))
         key = (str(get("country")), _period(day, period))
         group = groups[key]
-        group["speeches"] += 1
-        group["words"] += words
+        group["speeches"] += weight
+        group["sampled_speeches"] += 1
+        group["words"] += words * weight
         group["ai_words"] += ai_words
         group["mixed_words"] += mixed_words
-        group["ai_speech_sum"] += ai
-        group["mixed_speech_sum"] += mixed
+        group["ai_speech_sum"] += ai * weight
+        group["mixed_speech_sum"] += mixed * weight
     result = []
     for (country, period_value), group in sorted(groups.items()):
         words, n = group["words"], group["speeches"]
         result.append({
-            "country": country, "period": period_value, "speeches": int(n), "words": int(words),
+            "country": country, "period": period_value,
+            "speeches": n, "sampled_speeches": int(group["sampled_speeches"]), "words": words,
             "ai_words_estimate": group["ai_words"], "mixed_words_estimate": group["mixed_words"],
             "ai_word_share": group["ai_words"] / words if words else 0.0,
             "mixed_word_share": group["mixed_words"] / words if words else 0.0,

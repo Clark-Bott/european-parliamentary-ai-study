@@ -4,14 +4,17 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 import csv
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import html
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
 
 from .analysis import aggregate_results
+from .budget_sample import file_sha256, plan_sample, write_sample
 from .cost import estimate_cost
 from .io import iter_jsonl, write_jsonl
 from .models import Speech
@@ -82,7 +85,8 @@ def _mock_response(speech: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str) -> None:
+def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str,
+               share_key: str = "ai_word_share") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     width, height, left, right, top, bottom = 920, 440, 70, 25, 45, 70
     countries = list(dict.fromkeys(row["country"] for row in groups))
@@ -93,8 +97,8 @@ def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str) -> None:
     plot_width, plot_height = width - left - right, height - top - bottom
     points = {country: {} for country in countries}
     for row in groups:
-        points[row["country"]][row["period"]] = float(row["ai_word_share"])
-    maximum = max((float(row["ai_word_share"]) for row in groups), default=0.0)
+        points[row["country"]][row["period"]] = float(row[share_key])
+    maximum = max((float(row[share_key]) for row in groups), default=0.0)
     ceiling = max(0.05, min(1.0, maximum * 1.15))
     elements = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
                 '<rect width="100%" height="100%" fill="white"/>',
@@ -132,9 +136,10 @@ def _write_svg(path: Path, groups: list[dict[str, Any]], *, title: str) -> None:
 def _write_outputs(corpus_path: str | Path,
                    response_for_speech: Callable[[dict[str, Any]], dict[str, Any]],
                    results_dir: Path, *, model: str, synthetic: bool, mocked: bool,
-                   qa: dict[str, Any], estimate: dict[str, Any],
-                   response_min_words: int,
-                   positive_controls_path: str | Path | None = None) -> dict[str, Any]:
+                    qa: dict[str, Any], estimate: dict[str, Any],
+                    response_min_words: int,
+                    sampling_plan: dict[str, Any] | None = None,
+                    positive_controls_path: str | Path | None = None) -> dict[str, Any]:
     tables = results_dir / "tables"
     figures = results_dir / "figures"
     reports = results_dir / "reports"
@@ -205,13 +210,23 @@ def _write_outputs(corpus_path: str | Path,
         (reports / "positive_controls.json").write_text(
             json.dumps(positive_controls, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8")
+    suffix = (" (SAMPLED ESTIMATE)" if sampling_plan else "") + (" (MOCKED)" if mocked else "")
     _write_svg(figures / "all_countries.svg", periods["month"],
-               title="Pangram-classified AI-generated word share by month" + (" (MOCKED)" if mocked else ""))
+                title="Pangram-classified AI-generated word share by month" + suffix)
+    for key, label in (("mixed_word_share", "AI-assisted"),
+                       ("ai_plus_mixed_word_share", "AI-generated plus AI-assisted")):
+        _write_svg(figures / f"all_countries_{key}.svg", periods["month"],
+                   title=f"Pangram-classified {label} word share by month" + suffix,
+                   share_key=key)
     for country in COUNTRIES:
         safe = country.lower().replace(" ", "_")
         country_rows = [row for row in periods["month"] if row["country"] == country]
         _write_svg(figures / f"{safe}.svg", country_rows,
-                   title=f"{country}: AI-generated word share" + (" (MOCKED)" if mocked else ""))
+                   title=f"{country}: AI-generated word share" + suffix)
+        for key, label in (("mixed_word_share", "AI-assisted"),
+                           ("ai_plus_mixed_word_share", "AI-generated plus AI-assisted")):
+            _write_svg(figures / f"{safe}_{key}.svg", country_rows,
+                       title=f"{country}: {label} word share" + suffix, share_key=key)
     def response_records():
         for speech in iter_jsonl(corpus_path):
             if int(speech.get("word_count", 0)) < response_min_words:
@@ -221,6 +236,9 @@ def _write_outputs(corpus_path: str | Path,
     write_jsonl(processed / ("mock_results.jsonl" if mocked else "speech_results.jsonl"),
                 response_records())
     (reports / "corpus_qa.json").write_text(json.dumps(qa, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if sampling_plan:
+        (reports / "sampling_plan.json").write_text(
+            json.dumps(sampling_plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     status = "MOCKED PIPELINE DRY RUN — NOT RESEARCH RESULTS" if mocked else "Pangram inference outputs"
     report = [f"# Experiment run: {status}", "", f"Model selector: `{model}`", f"Speeches: {qa['records']:,}",
               f"Words: {estimate['words']:,}", f"Estimated cost at configured rate: ${estimate['estimated_cost']:.4f}",
@@ -228,11 +246,19 @@ def _write_outputs(corpus_path: str | Path,
               ("This report contains deterministic mocked detector fractions. "
                "Mock values are not Pangram findings and must not be cited as empirical results. "
                + ("The corpus is also a synthetic fixture. " if synthetic else "The supplied corpus may be real data. ")) if mocked else
-              "This report summarizes Pangram detector output. Classification is not proof of authorship or personal AI use.", "",
+               "This report summarizes Pangram detector output. Classification is not proof of authorship or personal AI use.", "",
+               ("Country-month simple random samples were drawn from the complete eligible corpus. "
+                "Monthly/annual shares, sensitivity, and party/term/length breakdowns use inverse-inclusion "
+                "weights; speech-level outputs and cost tables describe the selected sample only. "
+                "Speaker breakdowns are suppressed. Sampling uncertainty is not quantified: "
+                "small monthly samples are exploratory, not precise population rates. "
+                "See sampling_plan.json for selected/population counts, weights, and hashes."
+                if sampling_plan else "Full-corpus inference; no sampling weights."), "",
                 "Outputs: annual/monthly/quarterly tables, historical baseline and pooled pre/post tables, length/role sensitivity, descriptive party/term/length/pseudonymous-speaker splits, SVG figures, corpus QA JSON, and machine-readable result JSONL."]
     (reports / ("dry_run_report.md" if mocked else "results_report.md")).write_text("\n".join(report) + "\n", encoding="utf-8")
     return {"synthetic_smoke_test": synthetic, "mocked": mocked, "speeches": qa["records"], "words": estimate["words"],
-            "estimated_cost": estimate["estimated_cost"], "countries": qa["countries_present"],
+             "estimated_cost": estimate["estimated_cost"], "countries": qa["countries_present"],
+             "sampled": sampling_plan is not None,
             "positive_controls": positive_controls,
             "errors": qa["errors"], "warnings": qa["warnings"], "results_dir": str(results_dir)}
 
@@ -316,9 +342,14 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  processing_approval: str | Path | None = None,
                  positive_controls: str | Path | None = Path(
                      "data/controls/positive_controls.jsonl"),
-                 max_cost: float | None = None) -> dict[str, Any]:
+                  max_cost: float | None = None, sample_budget: float | None = None,
+                  sample_seed: int = 2026) -> dict[str, Any]:
     """Run the deterministic mock workflow or authorized Pangram inference."""
     target = Path(results_dir)
+    opposite = target / "reports" / ("results_report.md" if dry_run else "dry_run_report.md")
+    if opposite.exists():
+        raise ValueError(f"{target} already contains {'paid' if dry_run else 'mock'} outputs; "
+                         "use a separate results directory")
     synthetic = False
     if corpus is None:
         if not dry_run:
@@ -365,8 +396,6 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
         validate_processing_approval(
             processing_approval or "data/manifests/paid_processing_approval.json")
 
-    estimate = estimate_cost(iter_jsonl(corpus_path), price_per_1000_words=price_per_1000_words)
-    print(f"Corpus: {qa['records']} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
     control_records = (load_controls(positive_controls) if positive_controls is not None
                        and Path(positive_controls).is_file() else [])
     control_estimate = estimate_cost(control_records, price_per_1000_words=price_per_1000_words,
@@ -374,13 +403,61 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
     if control_records:
         print(f"Optional positive controls: {len(control_records)} texts; estimated extra cost "
               f"${control_estimate['estimated_cost']:.4f}.")
+    if max_cost is not None and (not math.isfinite(max_cost) or max_cost < 0):
+        raise ValueError("--max-cost must be finite and non-negative")
+    sampling_plan = None
+    if sample_budget is not None:
+        if not math.isfinite(sample_budget) or sample_budget <= 0:
+            raise ValueError("--sample-budget must be finite and positive")
+        if max_cost is not None and sample_budget > max_cost:
+            raise ValueError("--sample-budget cannot exceed --max-cost")
+        available = sample_budget - control_estimate["estimated_cost"]
+        if available < 0:
+            raise ValueError("positive controls alone exceed the sample budget")
+        sampling_plan = plan_sample(corpus_path, budget=available,
+                                    price_per_1000_words=price_per_1000_words, seed=sample_seed)
+        if not dry_run:
+            missing_eligible = [f"{country}:{year}" for country in COUNTRIES for year in range(2018, 2026)
+                                if not any(key.startswith(f"{country}:{year}-")
+                                           for key in sampling_plan["strata"])]
+            if missing_eligible:
+                raise ValueError("sample requires eligible country/year coverage; missing " + ", ".join(missing_eligible))
+        sampling_plan["total_budget_usd"] = sample_budget
+        sampling_plan["control_estimated_usd"] = control_estimate["estimated_cost"]
+        sampling_plan["control_sha256"] = (file_sha256(Path(positive_controls))
+                                           if control_records and positive_controls is not None else None)
+        sample_path = target / "processed" / "budget_sample.jsonl"
+        manifest_path = target / "reports" / "sampling_plan.json"
+        if manifest_path.exists():
+            previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for key in ("source_sha256", "seed", "budget_usd", "total_budget_usd",
+                        "control_sha256", "price_per_1000_words", "strata"):
+                if previous[key] != sampling_plan[key]:
+                    raise ValueError("existing sampling plan differs; use a new results directory")
+        write_sample(corpus_path, sample_path, sampling_plan)
+        if manifest_path.exists() and previous.get("sample_sha256") != sampling_plan["sample_sha256"]:
+            raise ValueError("sample does not match existing plan; use a new results directory")
+        corpus_path = sample_path
+        qa = _qa_for_path(corpus_path)
+        if qa["errors"]:
+            raise ValueError("sample failed QA: " + "; ".join(qa["errors"][:10]))
+    estimate = estimate_cost(iter_jsonl(corpus_path), price_per_1000_words=price_per_1000_words)
+    print(f"Corpus: {qa['records']} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
     total_cost = estimate["estimated_cost"] + control_estimate["estimated_cost"]
-    if max_cost is not None and max_cost < 0:
-        raise ValueError("--max-cost must be non-negative")
-    if max_cost is not None and total_cost > max_cost:
+    exact_cost = (Decimal(estimate["estimated_api_units"] + control_estimate["estimated_api_units"])
+                  * Decimal(str(price_per_1000_words)) / 10)
+    if sample_budget is not None and exact_cost > Decimal(str(sample_budget)):
+        raise PermissionError("sample and controls exceed the requested budget; no API calls made")
+    if max_cost is not None and exact_cost > Decimal(str(max_cost)):
         raise PermissionError(
             f"estimated cost ${total_cost:.2f} including positive controls exceeds the --max-cost "
             f"cap of ${max_cost:.2f}; raise the cap deliberately to continue")
+    if sampling_plan:
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        pending_manifest = manifest_path.with_suffix(".json.tmp")
+        pending_manifest.write_text(json.dumps(sampling_plan, ensure_ascii=False, indent=2) + "\n",
+                                    encoding="utf-8")
+        os.replace(pending_manifest, manifest_path)
     if dry_run:
         response_for_speech = _mock_response
         response_min_words = 0
@@ -436,5 +513,43 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
 
     return _write_outputs(corpus_path, response_for_speech, target, model=model,
                           synthetic=synthetic, mocked=dry_run, qa=qa, estimate=estimate,
-                          response_min_words=response_min_words,
-                          positive_controls_path=positive_controls)
+                           response_min_words=response_min_words,
+                           sampling_plan=sampling_plan,
+                           positive_controls_path=positive_controls)
+
+
+def run_api_test(*, results_dir: str | Path, model: str, api_key: str | None,
+                 confirm_paid_run: bool, price_per_1000_words: float,
+                 max_cost: float = 0.05) -> dict[str, Any]:
+    """One synthetic billable task only; no parliamentary text or study outputs."""
+    if not confirm_paid_run:
+        raise PermissionError("synthetic paid test requires --confirm-paid-run")
+    if not math.isfinite(price_per_1000_words) or price_per_1000_words < 0:
+        raise ValueError("price must be finite and non-negative")
+    text = ("This is a synthetic technical test of an API connection. It is not a parliamentary "
+            "speech or a research observation. The response checks that authentication, model "
+            "access, task polling, result validation, and local caching work. No claim about "
+            "real speakers or AI use should be made from this example.")
+    estimate = estimate_cost([{"country": "synthetic", "date": "2024-01-01",
+                               "word_count": len(text.split())}],
+                             price_per_1000_words=price_per_1000_words)
+    if not math.isfinite(max_cost) or max_cost < 0 or estimate["estimated_cost"] > max_cost:
+        raise PermissionError(f"one synthetic task estimated at ${estimate['estimated_cost']:.4f} "
+                              f"exceeds the test cap of ${max_cost:.4f}")
+    secret = api_key or os.environ.get("PANGRAM_API_KEY", "")
+    if not secret:
+        raise EnvironmentError("PANGRAM_API_KEY is required")
+    client = PangramClient(secret, model=model)
+    if model not in client.available_models():
+        raise ValueError(f"Pangram model {model!r} is not available to this API key")
+    target = Path(results_dir) / "api_test"
+    cache = ResponseCache(target / "raw_pangram")
+    # The task cache also prevents another charge after an interrupted poll.
+    response = client.analyze(text, cache, allow_paid=True)
+    summary = {"status": "synthetic API software check only — NOT RESEARCH RESULTS",
+               "model": model, "estimated_max_cost_usd": estimate["estimated_cost"],
+               "billing_units": estimate["estimated_api_units"],
+               "stage": response["stage"], "response_validated": True,
+               "cache_fingerprint": request_fingerprint(text, {"model": model, "public_dashboard_link": False})}
+    (target / "test_result.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    return summary

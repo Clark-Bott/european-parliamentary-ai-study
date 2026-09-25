@@ -16,9 +16,11 @@ data/controls/**
 !data/controls/.gitkeep
 
 # Per-text results can contain copyrighted transcript text returned by the API.
+results/**
 results/raw_pangram/**
 results/processed/**
 results/tables/**
 results/figures/**
 results/reports/**
+results/api_test/**
 !results/**/.gitkeep
