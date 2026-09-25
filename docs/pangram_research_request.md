@@ -1,5 +1,8 @@
 # Pangram research-credit request summary
 
+For the current three-step inquiry form and ready-to-adapt field entries, see
+[the field-by-field application draft](pangram_research_application_form.md).
+
 ## Research question
 
 How has the prevalence of AI-generated or AI-assisted text in parliamentary interventions changed since widespread generative AI, and how does it compare across major European legislatures?
