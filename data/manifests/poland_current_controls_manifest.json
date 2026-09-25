@@ -1,0 +1,13 @@
+{
+  "country": "Poland",
+  "output": "data/controls/poland_historical_sample.jsonl",
+  "sha256": "1eaaa3d8d3f2d4b017b8677ef1dab474e5ba6eea3aa711c7a1b4ad5421ec2e58",
+  "bytes": 7213790,
+  "seed": 2026,
+  "minimum_words": 40,
+  "sample_records": 1000,
+  "sample_words": 426523,
+  "year_counts": {"2018": 250, "2019": 250, "2020": 250, "2021": 250},
+  "maximum_per_identified_speaker": 2,
+  "note": "All 1,000 controls lack party metadata. Missing or sentinel speaker IDs are treated as distinct records by the sampler; this sample is not known human authorship."
+}

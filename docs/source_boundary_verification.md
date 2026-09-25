@@ -13,7 +13,7 @@ it.
 | Netherlands | 10 | 10 | 0 | 0 | 0 | 0 |
 | Italy | 10 | 8 | 2 | 0 | 0 | 0 |
 | Spain | 10 | 4 | 2 | 3 | 1 | 0 |
-| Poland | — | not run; acquisition still running | | | | |
+| Poland | 10 | 9 | 0 | 1 | 0 | 0 |
 
 Status meanings are recorded in
 `data/manifests/source_boundary_verification.json`:
@@ -44,6 +44,14 @@ the 40-word inference threshold. The result remains a mismatch in the
 machine-readable report; a full human speaker/date and boundary review has
 not been signed off.
 
+**Polish follow-up:** The Polish sample was checked against locally cached
+official Sejm HTML and the matching day-metadata files, not ten new HTTP
+responses. Speaker names and dates matched the cached metadata for all ten.
+The 303-word partial match (`sejm-term10-proceeding34-2025-05-07-statement175`)
+has its `raw_text` in the HTML; cleaned text omits stage-direction paragraphs,
+and the official statement includes other speakers' inline interjections.
+This still needs human intervention-boundary review. See [Poland QA](poland_corpus_qa.md).
+
 Transport per country: Germany and France are checked against the local
 official bulk archives (the CC0 CPP-BT CSV and the Syceron ZIPs) because
 their `source_url` values are a DOI and a bulk ZIP rather than a per-record
@@ -63,7 +71,8 @@ larger random sample (packets are generated under
 `data/interim/review_packets/`, Git-ignored because they contain transcript
 text), speaker-attribution and date confirmation against the official page,
 duplicate-review of the repeated French text hashes, and review of the
->10,000-word French record. Poland has not been checked at all yet.
+>10,000-word interventions in France and Poland. The Polish screen is cached-source
+evidence only, not a full audit of independent live statement content.
 
 ## Reproduce
 

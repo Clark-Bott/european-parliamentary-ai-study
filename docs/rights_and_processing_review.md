@@ -1,6 +1,6 @@
 # Rights and third-party processing review
 
-Evidence collected 2026-09-24. This is a source/processor reference, not legal advice or a runtime approval checklist. The researcher reported on 2026-09-25 that they checked processing readiness and directed removal of the approval-file step. This report is a user decision, not independent verification of account-specific terms. No Pangram text has been submitted yet.
+Evidence collected 2026-09-24. This is a source/processor reference, not legal advice or a runtime approval checklist. The researcher reported on 2026-09-25 that they checked processing readiness and directed removal of the approval-file step. This report is a user decision, not independent verification of account-specific terms. One 73-word Dutch corpus speech was submitted as a paid API diagnostic on 2026-09-25; full study inference has not run.
 
 ## Source materials
 

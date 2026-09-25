@@ -1,0 +1,20 @@
+{
+  "country": "Poland",
+  "output": "data/processed/poland_speeches.jsonl",
+  "sha256": "5cf13bf18dbb7e0840875a08754a21aa8b8bc38ffd8a23c79a0542322260e7c2",
+  "bytes": 554177130,
+  "through_date": "2026-09-25",
+  "records": 97513,
+  "words": 32231985,
+  "eligible_min_words": 40,
+  "eligible_records": 96528,
+  "eligible_words": 32203615,
+  "billable_units_100_words": 370923,
+  "list_price_usd_at_0_05_per_unit": 18546.15,
+  "duplicate_speech_ids": 0,
+  "duplicate_text_hashes_all_lengths": 34,
+  "records_over_10000_words": 213,
+  "coverage_audit": "data/manifests/poland_coverage_audit.json",
+  "source_provenance_note": "The local source_manifest.jsonl contains hashes for 95,521 unique Polish files, all verified against disk, but 2,458 cached statement bodies across 18 days and 16 day-metadata files lack manifest entries. Do not infer HTTP status or retrieval time for those cached-only files. The live proceedings indexes matched all 480 cached target days on 2026-09-25.",
+  "note": "Corpus and raw files are Git-ignored. Disk-backed integrity QA passed. Ten-record cached-official-HTML screening found nine exact text matches and one partial match; human source-boundary review is not complete."
+}

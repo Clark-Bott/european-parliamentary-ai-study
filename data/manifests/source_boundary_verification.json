@@ -86,6 +86,20 @@
           "observation": "Live official Diario contains the chair turn and its exact voting totals (346 votes, 202 for, 122 against, 22 abstentions). The parser removed the inline (Pausa) cue, leaving a double full stop; automatic containment marks a mismatch. At 26 words this procedural turn is below the 40-word inference threshold. Speaker/date review of the whole record remains open."
         }
       ]
+    },
+    "Poland": {
+      "sampled": 10,
+      "seed": 2026,
+      "status_counts": {"verified": 9, "partial": 1},
+      "transport": ["cached-official-html"],
+      "speaker_and_date_match_day_metadata": 10,
+      "unresolved": [{
+        "speech_id": "sejm-term10-proceeding34-2025-05-07-statement175",
+        "date": "2025-05-07",
+        "status": "partial",
+        "observation": "Raw text occurs in official cached HTML; cleaned text removes stage-direction paragraphs and the statement includes inline interjections by other speakers. Human intervention-boundary review is pending."
+      }],
+      "limitation": "Cached official HTML and day metadata, not a fresh request for every sampled statement."
     }
   }
 }

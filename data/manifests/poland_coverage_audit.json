@@ -1,0 +1,41 @@
+{
+  "terms": [
+    {
+      "term": 8,
+      "proceedings": 87,
+      "dates": 236,
+      "target_dates": 85,
+      "expected_spoken_bodies": 15665,
+      "first_date": "2015-11-12",
+      "last_date": "2019-10-16",
+      "statement_metadata_files": 85,
+      "statement_body_files": 15665
+    },
+    {
+      "term": 9,
+      "proceedings": 81,
+      "dates": 196,
+      "target_dates": 196,
+      "expected_spoken_bodies": 38298,
+      "first_date": "2019-11-12",
+      "last_date": "2023-08-30",
+      "statement_metadata_files": 196,
+      "statement_body_files": 38298
+    },
+    {
+      "term": 10,
+      "proceedings": 89,
+      "dates": 266,
+      "target_dates": 199,
+      "expected_spoken_bodies": 43550,
+      "first_date": "2023-11-13",
+      "last_date": "2027-09-10",
+      "statement_metadata_files": 199,
+      "statement_body_files": 43550
+    }
+  ],
+  "through_date": "2026-09-25",
+  "missing": [],
+  "complete": true,
+  "note": "Raw-file reconciliation against cached official proceedings indexes; independent live-index and manual boundary review remain separate."
+}
