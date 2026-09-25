@@ -34,7 +34,7 @@ A separate Pangram enterprise page says API content is processed transiently and
 - Public dashboard sharing is disabled in the API configuration.
 - Responses are cached locally by a SHA-256 fingerprint of exact text and model configuration.
 - API keys are read from the environment and are not stored in source files.
-- Paid execution requires an explicit flag, complete country/year coverage, and empty German and Spanish source-gap reports.
+- Paid execution requires an explicit flag, complete country/year coverage, present and empty German, Spanish, and Polish source-gap reports, and a recorded human approval.
 
 These safeguards reduce exposure but do not replace a processor agreement or legal approval.
 

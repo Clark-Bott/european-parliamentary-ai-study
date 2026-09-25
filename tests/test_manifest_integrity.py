@@ -14,6 +14,7 @@ class CurrentControlManifestTests(unittest.TestCase):
         for manifest in sorted((ROOT / "data/manifests").glob("*_current_controls_manifest.json")):
             with self.subTest(manifest=manifest.name):
                 record = json.loads(manifest.read_text(encoding="utf-8"))
+                self.assertIn(record["sha256"], documentation)
                 path = ROOT / record["output"]
                 if not path.is_file():
                     # Generated controls are intentionally absent in a fresh clone.
@@ -23,7 +24,6 @@ class CurrentControlManifestTests(unittest.TestCase):
                     for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                         digest.update(chunk)
                 self.assertEqual(digest.hexdigest(), record["sha256"])
-                self.assertIn(record["sha256"], documentation)
 
 
 if __name__ == "__main__":
