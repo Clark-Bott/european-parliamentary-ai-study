@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from html.parser import HTMLParser
 import json
 import os
@@ -126,27 +127,32 @@ def download_sejm_date(term: int, proceeding: int, date_value: str, *,
 
 
 def iter_sejm_speeches(*, start_year: int = 2018, end_year: int = 2026,
-                       terms: tuple[int, ...] = TERMS,
-                       raw_dir: str | Path = "data/raw",
-                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
-                       workers: int = 4) -> Iterator[Speech]:
+                        terms: tuple[int, ...] = TERMS,
+                        raw_dir: str | Path = "data/raw",
+                        manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
+                        workers: int = 4, through_date: str | None = None) -> Iterator[Speech]:
     """Fetch all plenary statement bodies in the requested years; resumable via raw-file cache."""
+    cutoff = date.fromisoformat(through_date) if through_date else date.today()
     for term in terms:
         list_url = f"{API}/term{term}/proceedings"
         list_path = Path(raw_dir) / "poland" / f"term-{term}" / "proceedings.json"
         proceedings = json.loads(_cached_download(list_url, list_path, manifest_path))
         for sitting in proceedings:
             proceeding = int(sitting["number"])
+            if proceeding <= 0:  # provisional schedule placeholders have no transcript
+                continue
             for date_value in sitting.get("dates", []):
-                year = int(date_value[:4])
-                if start_year <= year <= end_year:
+                day = date.fromisoformat(date_value)
+                if start_year <= day.year <= end_year and day <= cutoff:
                     yield from download_sejm_date(term, proceeding, date_value,
                                                   raw_dir=raw_dir, manifest_path=manifest_path,
                                                   workers=workers)
 
 
-def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw") -> dict[str, Any]:
+def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw", *,
+                            through_date: str | None = None) -> dict[str, Any]:
     """Reconcile every 2018–2026 indexed sitting date with its spoken bodies."""
+    cutoff = date.fromisoformat(through_date) if through_date else date.today()
     terms = []
     missing: list[dict[str, Any]] = []
     for term in TERMS:
@@ -158,7 +164,9 @@ def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw") -> dict[str, Any]:
         dates = [date_value for sitting in proceedings for date_value in sitting.get("dates", [])]
         target_days = [(int(sitting["number"]), date_value)
                        for sitting in proceedings for date_value in sitting.get("dates", [])
-                       if 2018 <= int(date_value[:4]) <= 2026]
+                       if int(sitting["number"]) > 0
+                       and 2018 <= date.fromisoformat(date_value).year <= 2026
+                       and date.fromisoformat(date_value) <= cutoff]
         expected_bodies = 0
         for proceeding, date_value in target_days:
             day = root / f"proceeding-{proceeding}" / date_value
@@ -203,7 +211,8 @@ def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw") -> dict[str, Any]:
             "first_date": min(dates) if dates else None, "last_date": max(dates) if dates else None,
             "statement_metadata_files": len(metadata_files), "statement_body_files": len(body_files),
         })
-    return {"terms": terms, "missing": missing, "complete": not missing,
+    return {"terms": terms, "through_date": cutoff.isoformat(),
+            "missing": missing, "complete": not missing,
             "note": "Raw-file reconciliation against cached official proceedings indexes; "
                     "independent live-index and manual boundary review remain separate."}
 
@@ -211,8 +220,10 @@ def audit_sejm_raw_coverage(raw_dir: str | Path = "data/raw") -> dict[str, Any]:
 def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_year: int = 2026,
                       terms: tuple[int, ...] = TERMS, raw_dir: str | Path = "data/raw",
                       manifest_path: str | Path = "data/manifests/source_manifest.jsonl",
-                      workers: int = 4, resume_partial: bool = False) -> dict[str, int | str]:
+                      workers: int = 4, resume_partial: bool = False,
+                      through_date: str | None = None) -> dict[str, int | str]:
     records = words = 0
+    cutoff = date.fromisoformat(through_date).isoformat() if through_date else date.today().isoformat()
 
     if resume_partial:
         target = Path(output_path)
@@ -233,7 +244,7 @@ def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_ye
             nonlocal records, words
             iterator = iter_sejm_speeches(start_year=start_year, end_year=end_year, terms=terms,
                                          raw_dir=raw_dir, manifest_path=manifest_path,
-                                         workers=workers)
+                                         workers=workers, through_date=cutoff)
             # Do not mutate the partial file unless every saved record matches
             # the source-derived prefix in the same order and with the same text.
             for saved in iter_jsonl(partial):
@@ -264,7 +275,7 @@ def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_ye
             nonlocal records, words
             for speech in iter_sejm_speeches(start_year=start_year, end_year=end_year, terms=terms,
                                              raw_dir=raw_dir, manifest_path=manifest_path,
-                                             workers=workers):
+                                             workers=workers, through_date=cutoff):
                 records += 1
                 words += speech.word_count
                 yield speech.to_dict()
@@ -272,13 +283,14 @@ def build_sejm_corpus(output_path: str | Path, *, start_year: int = 2018, end_ye
         write_jsonl(output_path, serialized())
     coverage_path = Path(manifest_path).parent / "poland_coverage_audit.json"
     coverage_path.parent.mkdir(parents=True, exist_ok=True)
-    coverage = audit_sejm_raw_coverage(raw_dir)
+    coverage = audit_sejm_raw_coverage(raw_dir, through_date=cutoff)
     coverage_path.write_text(json.dumps(coverage, ensure_ascii=False, indent=2) + "\n",
                              encoding="utf-8")
     gap_path = coverage_path.parent / "poland_unavailable_statements.json"
     gap_path.write_text(json.dumps(coverage["missing"], ensure_ascii=False, indent=2) + "\n",
                         encoding="utf-8")
-    return {"records": records, "words": words, "coverage_audit": str(coverage_path)}
+    return {"records": records, "words": words, "through_date": cutoff,
+            "coverage_audit": str(coverage_path)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -293,12 +305,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="bounded parallel statement-body downloads per sitting day")
     parser.add_argument("--resume-partial", action="store_true",
                         help="validate and append to an existing .jsonl.tmp corpus")
+    parser.add_argument("--through-date", type=str,
+                        help="latest sitting date to include (ISO); defaults to today's date")
     args = parser.parse_args(argv)
     if args.workers < 1:
         parser.error("--workers must be positive")
     stats = build_sejm_corpus(args.output, start_year=args.start_year, end_year=args.end_year,
                               raw_dir=args.raw_dir, manifest_path=args.manifest,
-                              workers=args.workers, resume_partial=args.resume_partial)
+                              workers=args.workers, resume_partial=args.resume_partial,
+                              through_date=args.through_date)
     print(json.dumps({"country": "Poland", "output": str(args.output), **stats}, ensure_ascii=False, indent=2))
     return 0
 

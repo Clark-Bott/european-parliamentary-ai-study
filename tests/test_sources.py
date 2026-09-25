@@ -18,7 +18,8 @@ from parliament_ai_study.sources.netherlands import (audit_tweede_kamer_coverage
     _select_final_report)
 from unittest.mock import patch
 from parliament_ai_study.sources.sejm import (audit_sejm_raw_coverage, build_sejm_corpus,
-                                                download_sejm_date, parse_sejm_statement)
+                                                download_sejm_date, iter_sejm_speeches,
+                                                parse_sejm_statement)
 from parliament_ai_study.sources.spain import (_has_journal, _html_full_text_available,
                                              parse_congreso_html, journal_url)
 from parliament_ai_study.sources.spain_pdf import _Chunk, _Line, parse_congreso_pdf
@@ -537,6 +538,33 @@ class NetherlandsParserTests(unittest.TestCase):
 
 
 class SejmParserTests(unittest.TestCase):
+    def test_sejm_index_skips_future_dates_and_placeholder_sittings(self):
+        index = [{"number": 1, "dates": ["2024-01-02", "2024-01-03"]},
+                 {"number": 0, "dates": ["2024-01-01"]}]
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("parliament_ai_study.sources.sejm._cached_download",
+                       return_value=json.dumps(index).encode("utf-8")), \
+                 patch("parliament_ai_study.sources.sejm.download_sejm_date",
+                       return_value=["cached transcript"]) as downloader:
+                rows = list(iter_sejm_speeches(terms=(10,), raw_dir=directory,
+                                              through_date="2024-01-02"))
+            self.assertEqual(rows, ["cached transcript"])
+            downloader.assert_called_once()
+            self.assertEqual(downloader.call_args.args, (10, 1, "2024-01-02"))
+
+    def test_raw_coverage_does_not_treat_scheduled_future_as_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "poland"
+            for term in (8, 9, 10):
+                index = root / f"term-{term}/proceedings.json"
+                index.parent.mkdir(parents=True)
+                index.write_text(json.dumps([{"number": 1, "dates": ["2024-01-03"]},
+                                             {"number": 0, "dates": ["2024-01-01"]}]
+                                            if term == 10 else []), encoding="utf-8")
+            report = audit_sejm_raw_coverage(directory, through_date="2024-01-02")
+            self.assertTrue(report["complete"])
+            self.assertEqual(report["terms"][2]["target_dates"], 0)
+
     def test_resume_partial_validates_prefix_and_promotes_only_after_completion(self):
         from parliament_ai_study.models import Speech
 
