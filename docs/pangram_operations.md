@@ -11,8 +11,10 @@ A paid run refuses to start unless all of these hold:
    configured model for that key.
 3. The combined corpus passes disk-backed QA with no errors.
 4. Every `country:year` from 2018 to 2025 has records.
-5. Every `--gap-report` file is empty (`germany_unavailable_protocols.json`,
-   `spain_unavailable_journals.json` by default).
+5. Every required source-gap report exists and contains an empty JSON list:
+   `germany_unavailable_protocols.json`, `spain_unavailable_journals.json`,
+   and `poland_unavailable_statements.json` by default. An absent report
+   blocks the paid run; it is not treated as evidence of no gaps.
 6. `data/manifests/paid_processing_approval.json` exists and records human
    review of source terms, processor terms, and international transfers.
 7. If `--max-cost X` is given, the estimate is at most $X.
@@ -59,6 +61,6 @@ responses are loaded from cache, so only unfinished items are billed.
 
 ## Cost cap
 
-`--max-cost 500` aborts before any request when the estimate for the run
-exceeds $500. Use it as a second, independent limit alongside
+`--max-cost 500` aborts before any request when the estimate for the corpus
+**plus optional positive controls** exceeds $500. Use it as a second, independent limit alongside
 `--confirm-paid-run`.

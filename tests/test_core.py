@@ -604,6 +604,8 @@ class PositiveControlTests(unittest.TestCase):
             normalize_record(self._record(source_url="https://example.test/official"), 0)
         with self.assertRaises(ValueError):
             normalize_record(self._record(country="Belgium"), 0)
+        with self.assertRaisesRegex(ValueError, "no words"):
+            normalize_record(self._record(text="!!!"), 0)
 
     def test_import_writes_every_supplied_passage_and_load_revalidates(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -695,6 +697,18 @@ class SourceBoundaryReviewTests(unittest.TestCase):
                              price_per_1000_words=0.5, model="pangram-4",
                              max_cost=0.01)
             self.assertFalse((base / "out/tables").exists())
+
+    def test_max_cost_includes_optional_positive_controls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            controls = base / "positive_controls.jsonl"
+            write_jsonl(controls, [{"country": "Spain", "text_language": "es",
+                                    "generator": "test-llm", "prompt_id": "p1",
+                                    "text": "Señorías, esta enmienda mejora el texto."}])
+            with self.assertRaisesRegex(PermissionError, "including positive controls"):
+                run_pipeline(corpus=None, results_dir=base / "out", dry_run=True,
+                             price_per_1000_words=0.5, model="pangram-4",
+                             max_cost=1.80, positive_controls=controls)
 
 
 if __name__ == "__main__":

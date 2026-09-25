@@ -362,9 +362,19 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
 
     estimate = estimate_cost(iter_jsonl(corpus_path), price_per_1000_words=price_per_1000_words)
     print(f"Corpus: {qa['records']} speeches, {estimate['words']:,} words; estimated Pangram cost ${estimate['estimated_cost']:.4f} at ${price_per_1000_words}/1,000 words.")
-    if max_cost is not None and estimate["estimated_cost"] > max_cost:
+    control_records = (load_controls(positive_controls) if positive_controls is not None
+                       and Path(positive_controls).is_file() else [])
+    control_estimate = estimate_cost(control_records, price_per_1000_words=price_per_1000_words,
+                                     min_words=1)
+    if control_records:
+        print(f"Optional positive controls: {len(control_records)} texts; estimated extra cost "
+              f"${control_estimate['estimated_cost']:.4f}.")
+    total_cost = estimate["estimated_cost"] + control_estimate["estimated_cost"]
+    if max_cost is not None and max_cost < 0:
+        raise ValueError("--max-cost must be non-negative")
+    if max_cost is not None and total_cost > max_cost:
         raise PermissionError(
-            f"estimated cost ${estimate['estimated_cost']:.2f} exceeds the --max-cost "
+            f"estimated cost ${total_cost:.2f} including positive controls exceeds the --max-cost "
             f"cap of ${max_cost:.2f}; raise the cap deliberately to continue")
     if dry_run:
         response_for_speech = _mock_response
@@ -403,8 +413,8 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
         # Synthetic positive controls are billed like any other text and are
         # submitted through the same fingerprint cache, so a restart never
         # pays for one twice.
-        if positive_controls is not None and Path(positive_controls).is_file():
-            for index, control in enumerate(load_controls(positive_controls), 1):
+        if control_records:
+            for index, control in enumerate(control_records, 1):
                 print(f"Pangram positive control {index}: {control['speech_id']}")
                 try:
                     client.analyze(str(control["speech_text"]), cache, allow_paid=True)

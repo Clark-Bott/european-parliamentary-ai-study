@@ -91,6 +91,8 @@ def normalize_record(record: dict[str, Any], index: int) -> dict[str, Any]:
                 f"positive control {index}: {forbidden} must stay empty; synthetic "
                 "passages must not impersonate an official source record")
     text = str(record["text"])
+    if word_count(text) < 1:
+        raise ValueError(f"positive control {index}: text contains no words")
     prompt_id = str(record["prompt_id"])
     return {
         "country": country,

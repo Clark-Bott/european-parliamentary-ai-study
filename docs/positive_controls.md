@@ -56,5 +56,8 @@ to the historical baseline table, and do not treat it as a correction factor.
 
 ## Cost
 
-Positive controls add a few thousand words in total, under $2 at the default
-rate. They are not included in the corpus cost tables.
+If the researcher follows the 18 × 150–400-word brief, the controls add
+between 2,700 and 7,200 words. Started-block billing determines the actual
+estimate; do not assume they cost under $2. Their estimate is printed before
+a run and included in `--max-cost`, but remains separate from the corpus cost
+table. No controls have been generated or submitted yet.
