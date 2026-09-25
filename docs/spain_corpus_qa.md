@@ -4,6 +4,19 @@ The Congreso Diario adapter produced **101,069 speaker-attributed turns / 28,139
 
 The 40-word-eligible subset has **50,204 records / 27,324,974 words**, or **297,254 started 100-word units / $14,862.70** at the current list rate. The historical control contains 1,000 records / 372,565 words and has a $210.45 list-price estimate. No Pangram inference was performed.
 
+**Procedural-turn review (2026-09-25):** Among those 50,204 eligible turns,
+**3,830 presiding-officer turns / 256,449 words** include the phrase
+`votos emitidos` (vote totals). This is 7.6% of eligible turns but 0.94% of
+eligible words. Some turns combine a vote result with agenda text; a simple
+substring exclusion would discard possibly substantive material. These
+records remain in the corpus and primary cost estimate, and the pipeline
+offers an `exclude_chairs` sensitivity. Manually code a sample and adopt an
+explicit procedural rule before interpreting the primary estimates; the
+40-word threshold alone does not remove voting formulas. A 26-word chair
+turn with a removed `(Pausa)` cue appears in the corrected
+[source-boundary screen](source_boundary_verification.md) but is below the
+inference threshold. No vote text has been sent to Pangram.
+
 ## PDF fallback evidence
 
 The fallback files were retrieved from the official Congreso PDF paths and match these SHA-256 hashes:
