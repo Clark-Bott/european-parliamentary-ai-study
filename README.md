@@ -58,6 +58,8 @@ uv run --python 3.12 python -m parliament_ai_study.sources.monitor_sejm
 
 Add `--once` for a single snapshot or `--offline` to avoid fetching a missing sitting-day index from the public Sejm API. The Rich bars count cached **sitting-day metadata**, not completed speeches or validated coverage; the display separately shows flushed records, the latest record, and bodies cached for its day. The monitor does not change the partial corpus or provenance manifest. The current acquisition was started before the future-date cutoff fix and may stop at a scheduled sitting; if so, resume it with the documented `--resume-partial --through-date 2026-09-25` flags after the old writer stops.
 
+Poland has an [official whole-day stenographic PDF archive](docs/poland_acquisition_options.md). The current corpus uses the separately numbered HTML statements for trustworthy speaker boundaries. The Sejm downloader can now use one plain HTTP GET per small file rather than a redundant byte-range probe; this will apply only after the existing writer stops and is resumed. Do not switch to PDF extraction or a third-party corpus without a new parser and source-boundary QA.
+
 Run tests with:
 
 ```bash

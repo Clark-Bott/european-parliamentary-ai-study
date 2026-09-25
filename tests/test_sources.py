@@ -162,6 +162,44 @@ class CongresoParserTests(unittest.TestCase):
 
 
 class ManifestTests(unittest.TestCase):
+    def test_small_file_mode_uses_one_plain_get_and_preserves_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "statement.html"
+            manifest = Path(directory) / "manifest.jsonl"
+            requests = []
+
+            class Response:
+                status = 200
+                headers = {"Content-Type": "text/html", "Content-Length": "18"}
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def __init__(self): self.position = 0
+                def read(self, size=-1):
+                    data = b"<p>Official text</p>"
+                    chunk = data[self.position:self.position + size]
+                    self.position += len(chunk)
+                    return chunk
+
+            def opener(request, timeout):
+                requests.append(request.get_header("Range"))
+                return Response()
+
+            # Actual payload is longer than the declared length: fail closed
+            # rather than cache a truncated or inconsistent source file.
+            with self.assertRaises(IncompleteRead):
+                download_file("https://api.sejm.gov.pl/statement", target,
+                              manifest_path=manifest, use_range=False,
+                              opener=opener, retries=1, sleep=lambda _: None)
+            self.assertFalse(target.exists())
+            self.assertFalse(manifest.exists())
+            Response.headers["Content-Length"] = str(len(b"<p>Official text</p>"))
+            entry = download_file("https://api.sejm.gov.pl/statement", target,
+                                  manifest_path=manifest, use_range=False,
+                                  opener=opener, retries=1, sleep=lambda _: None)
+            self.assertEqual(requests, [None, None])
+            self.assertEqual(entry["sha256"], hashlib.sha256(target.read_bytes()).hexdigest())
+            self.assertEqual(len(manifest.read_text().splitlines()), 1)
+
     def test_unknown_range_total_falls_back_to_verified_plain_get(self):
         with tempfile.TemporaryDirectory() as directory:
             calls = []

@@ -97,7 +97,11 @@ def parse_sejm_statement(html_data: str | bytes, statement: dict[str, Any], *,
 
 def _cached_download(url: str, destination: Path, manifest_path: str | Path) -> bytes:
     if not destination.is_file():
-        download_file(url, destination, manifest_path=manifest_path)
+        # Proceedings indexes, day metadata and individual statements are
+        # small. A ranged probe plus the full range otherwise costs two HTTP
+        # round trips for each statement; the plain GET still streams to an
+        # atomic file and records the same hash/URL provenance.
+        download_file(url, destination, manifest_path=manifest_path, use_range=False)
     return destination.read_bytes()
 
 

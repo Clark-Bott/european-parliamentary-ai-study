@@ -62,11 +62,12 @@ def _parse_content_range(value: str | None) -> tuple[int, int, int] | None:
 
 
 def download_file(url: str, destination: str | Path, *, manifest_path: str | Path,
-                  headers: dict[str, str] | None = None, timeout: float = 180,
-                  retries: int = 3, chunk_size: int = 1024 * 1024,
-                  range_chunk_size: int = 4 * 1024 * 1024,
-                  opener=urlopen, sleep=time.sleep) -> dict[str, Any]:
-    """Stream to disk and use verified byte ranges when the server supports them."""
+                   headers: dict[str, str] | None = None, timeout: float = 180,
+                   retries: int = 3, chunk_size: int = 1024 * 1024,
+                   range_chunk_size: int = 4 * 1024 * 1024,
+                   opener=urlopen, sleep=time.sleep,
+                   use_range: bool = True) -> dict[str, Any]:
+    """Stream to disk; skip a redundant range probe for known small files."""
     if retries < 1 or chunk_size < 1 or range_chunk_size < 1:
         raise ValueError("retries and chunk sizes must be positive")
     target = Path(destination)
@@ -134,6 +135,10 @@ def download_file(url: str, destination: str | Path, *, manifest_path: str | Pat
 
     for attempt in range(retries):
         try:
+            if not use_range:
+                with opener(Request(url, headers=request_headers), timeout=timeout) as response:
+                    stream_full(response)
+                break
             probe_headers = {**request_headers, "Range": "bytes=0-0"}
             with opener(Request(url, headers=probe_headers), timeout=timeout) as response:
                 metadata = {"status": response.status,
