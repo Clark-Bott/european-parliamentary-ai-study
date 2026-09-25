@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .analysis import aggregate_results
+from .analysis import aggregate_results, response_shares
 from .budget_sample import file_sha256, plan_sample, write_sample
 from .cost import estimate_cost
 from .io import iter_jsonl, write_jsonl
@@ -335,6 +335,36 @@ def _cached_response(cache: ResponseCache, model: str,
     return state["response"]
 
 
+def _validate_paid_corpus(corpus_path: Path, qa: dict[str, Any],
+                          gap_reports: str | Path | Iterable[str | Path] | None,
+                          processing_approval: str | Path | None) -> None:
+    """Apply the same full-source checks before *any* parliamentary submission."""
+    missing = [f"{country}:{year}" for country in COUNTRIES for year in range(2018, 2026)
+               if not qa["country_year_counts"].get(f"{country}:{year}")]
+    if missing:
+        raise ValueError("paid six-country run requires country/year coverage; missing " + ", ".join(missing))
+    if isinstance(gap_reports, (str, Path)):
+        report_paths = (Path(gap_reports),)
+    elif gap_reports is None:
+        report_paths = (Path("data/manifests/spain_unavailable_journals.json"),
+                        Path("data/manifests/germany_unavailable_protocols.json"),
+                        Path("data/manifests/poland_unavailable_statements.json"))
+    else:
+        report_paths = tuple(Path(path) for path in gap_reports)
+    if not report_paths:
+        raise ValueError("paid inference requires source-gap reports")
+    for gaps_path in report_paths:
+        if not gaps_path.is_file():
+            raise ValueError(f"required source-gap report is missing: {gaps_path}")
+        gaps = json.loads(gaps_path.read_text(encoding="utf-8"))
+        if not isinstance(gaps, list):
+            raise ValueError(f"source-gap report must be a JSON list: {gaps_path}")
+        if gaps:
+            raise ValueError(f"unresolved official source gaps recorded in {gaps_path}; no paid submission")
+    validate_processing_approval(
+        processing_approval or "data/manifests/paid_processing_approval.json")
+
+
 def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                  dry_run: bool, price_per_1000_words: float, model: str,
                  confirm_paid_run: bool = False, api_key: str | None = None,
@@ -371,30 +401,7 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
     if qa["errors"]:
         raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
     if not dry_run:
-        missing = [f"{country}:{year}" for country in COUNTRIES for year in range(2018, 2027)
-                   if year != 2026 and not qa["country_year_counts"].get(f"{country}:{year}")]
-        if missing:
-            raise ValueError("paid six-country run requires country/year coverage; missing " + ", ".join(missing))
-        if isinstance(gap_reports, (str, Path)):
-            report_paths = (Path(gap_reports),)
-        elif gap_reports is None:
-            report_paths = (Path("data/manifests/spain_unavailable_journals.json"),
-                            Path("data/manifests/germany_unavailable_protocols.json"),
-                            Path("data/manifests/poland_unavailable_statements.json"))
-        else:
-            report_paths = tuple(Path(path) for path in gap_reports)
-        if not report_paths:
-            raise ValueError("paid inference requires source-gap reports")
-        for gaps_path in report_paths:
-            if not gaps_path.is_file():
-                raise ValueError(f"required source-gap report is missing: {gaps_path}")
-            gaps = json.loads(gaps_path.read_text(encoding="utf-8"))
-            if not isinstance(gaps, list):
-                raise ValueError(f"source-gap report must be a JSON list: {gaps_path}")
-            if gaps:
-                raise ValueError(f"unresolved official source gaps recorded in {gaps_path}; no paid submission")
-        validate_processing_approval(
-            processing_approval or "data/manifests/paid_processing_approval.json")
+        _validate_paid_corpus(corpus_path, qa, gap_reports, processing_approval)
 
     control_records = (load_controls(positive_controls) if positive_controls is not None
                        and Path(positive_controls).is_file() else [])
@@ -518,38 +525,110 @@ def run_pipeline(*, corpus: str | Path | None, results_dir: str | Path,
                            positive_controls_path=positive_controls)
 
 
-def run_api_test(*, results_dir: str | Path, model: str, api_key: str | None,
-                 confirm_paid_run: bool, price_per_1000_words: float,
-                 max_cost: float = 0.05) -> dict[str, Any]:
-    """One synthetic billable task only; no parliamentary text or study outputs."""
+def _select_test_speeches(corpus_path: Path, *, count: int,
+                          country: str | None) -> list[dict[str, Any]]:
+    """Keep the lowest hash priorities for distinct short contemporary texts."""
+    top: list[tuple[bytes, bytes, dict[str, Any]]] = []
+    for speech in iter_jsonl(corpus_path):
+        words = int(speech["word_count"])
+        if not 40 <= words <= 100 or str(speech["date"]) < "2023-01-01":
+            continue
+        if country is not None and speech["country"] != country:
+            continue
+        identity = f"2026|{speech['country']}|{speech['date']}|{speech['speech_id']}"
+        rank = hashlib.sha256(identity.encode("utf-8")).digest()
+        text_hash = hashlib.sha256(str(speech["speech_text"]).encode("utf-8")).digest()
+        match = next((index for index, (_, digest, _) in enumerate(top)
+                      if digest == text_hash), None)
+        if match is not None:
+            if rank < top[match][0]:
+                top[match] = (rank, text_hash, speech)
+                top.sort(key=lambda item: item[0])
+        elif len(top) < count or rank < top[-1][0]:
+            top.append((rank, text_hash, speech))
+            top.sort(key=lambda item: item[0])
+            del top[count:]
+    if len(top) != count:
+        raise ValueError(f"only {len(top)} distinct eligible 40–100 word speeches since 2023 "
+                         f"found in {country or 'the corpus'}; requested {count}")
+    return [speech for _, _, speech in top]
+
+
+def run_api_test(*, corpus: str | Path, results_dir: str | Path, model: str,
+                 api_key: str | None, confirm_paid_run: bool,
+                 price_per_1000_words: float, max_cost: float = 0.05,
+                 test_count: int = 1, test_country: str | None = None,
+                 gap_reports: str | Path | Iterable[str | Path] | None = None,
+                 processing_approval: str | Path | None = None) -> dict[str, Any]:
+    """Classify at most three real corpus speeches, with full paid-run guards."""
     if not confirm_paid_run:
-        raise PermissionError("synthetic paid test requires --confirm-paid-run")
+        raise PermissionError("parliamentary paid test requires --confirm-paid-run")
+    if not 1 <= test_count <= 3:
+        raise ValueError("--test-count must be between 1 and 3")
+    if test_country is not None and test_country not in COUNTRIES:
+        raise ValueError(f"--test-country must be one of: {', '.join(COUNTRIES)}")
     if not math.isfinite(price_per_1000_words) or price_per_1000_words < 0:
         raise ValueError("price must be finite and non-negative")
-    text = ("This is a synthetic technical test of an API connection. It is not a parliamentary "
-            "speech or a research observation. The response checks that authentication, model "
-            "access, task polling, result validation, and local caching work. No claim about "
-            "real speakers or AI use should be made from this example.")
-    estimate = estimate_cost([{"country": "synthetic", "date": "2024-01-01",
-                               "word_count": len(text.split())}],
-                             price_per_1000_words=price_per_1000_words)
-    if not math.isfinite(max_cost) or max_cost < 0 or estimate["estimated_cost"] > max_cost:
-        raise PermissionError(f"one synthetic task estimated at ${estimate['estimated_cost']:.4f} "
-                              f"exceeds the test cap of ${max_cost:.4f}")
+    if not math.isfinite(max_cost) or max_cost < 0:
+        raise ValueError("--max-cost must be finite and non-negative")
+    corpus_path = Path(corpus)
+    if not corpus_path.is_file():
+        raise FileNotFoundError(f"test corpus not found: {corpus_path}; --test-api never downloads or builds it")
+    corpus_sha256 = file_sha256(corpus_path)
+    qa = _qa_for_path(corpus_path)
+    if qa["errors"]:
+        raise ValueError("corpus failed QA: " + "; ".join(qa["errors"][:10]))
+    _validate_paid_corpus(corpus_path, qa, gap_reports, processing_approval)
+    selected = _select_test_speeches(corpus_path, count=test_count, country=test_country)
+    if file_sha256(corpus_path) != corpus_sha256:
+        raise ValueError("corpus changed during API test preflight; no request submitted")
+    estimate = estimate_cost(selected, price_per_1000_words=price_per_1000_words)
+    exact_cost = Decimal(estimate["estimated_api_units"]) * Decimal(str(price_per_1000_words)) / 10
+    if exact_cost > Decimal(str(max_cost)):
+        raise PermissionError(f"{test_count} corpus task(s) estimated at ${estimate['estimated_cost']:.4f} "
+                              f"exceed the test cap of ${max_cost:.4f}")
+    configuration = {"model": model, "public_dashboard_link": False}
+    selection = {"status": "real corpus API diagnostic — NOT STUDY RESULTS",
+                 "corpus_sha256": corpus_sha256, "model": model,
+                 "price_per_1000_words": price_per_1000_words,
+                 "estimated_max_cost_usd": estimate["estimated_cost"],
+                 "billing_units": estimate["estimated_api_units"],
+                 "speeches": [{"speech_id": str(speech["speech_id"]),
+                               "country": speech["country"], "date": speech["date"],
+                               "source_url": speech["source_url"],
+                               "word_count": speech["word_count"],
+                               "cache_fingerprint": request_fingerprint(str(speech["speech_text"]), configuration)}
+                              for speech in selected]}
+    target = Path(results_dir) / "api_test"
+    selection_path = target / "selection.json"
+    result_path = target / "test_result.json"
+    if selection_path.exists():
+        if json.loads(selection_path.read_text(encoding="utf-8")) != selection:
+            raise ValueError("existing API test selection differs; use a new results directory")
+    elif result_path.exists():
+        raise ValueError("existing API test output has no selection record; use a new results directory")
     secret = api_key or os.environ.get("PANGRAM_API_KEY", "")
     if not secret:
         raise EnvironmentError("PANGRAM_API_KEY is required")
     client = PangramClient(secret, model=model)
     if model not in client.available_models():
         raise ValueError(f"Pangram model {model!r} is not available to this API key")
-    target = Path(results_dir) / "api_test"
+    target.mkdir(parents=True, exist_ok=True)
+    pending = selection_path.with_suffix(".json.tmp")
+    pending.write_text(json.dumps(selection, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(pending, selection_path)
     cache = ResponseCache(target / "raw_pangram")
-    # The task cache also prevents another charge after an interrupted poll.
-    response = client.analyze(text, cache, allow_paid=True)
-    summary = {"status": "synthetic API software check only — NOT RESEARCH RESULTS",
-               "model": model, "estimated_max_cost_usd": estimate["estimated_cost"],
-               "billing_units": estimate["estimated_api_units"],
-               "stage": response["stage"], "response_validated": True,
-               "cache_fingerprint": request_fingerprint(text, {"model": model, "public_dashboard_link": False})}
-    (target / "test_result.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    results = []
+    for speech, metadata in zip(selected, selection["speeches"], strict=True):
+        response = client.analyze(str(speech["speech_text"]), cache, allow_paid=True)
+        ai, assisted = response_shares(response, str(speech["speech_id"]))
+        results.append({**metadata, "stage": response["stage"],
+                        "ai_only_share": ai, "ai_assisted_share": assisted,
+                        "ai_plus_assisted_share": ai + assisted})
+        summary = {**{key: value for key, value in selection.items() if key != "speeches"},
+                   "completed_speeches": results,
+                   "note": "Detector classification of short speeches is not proof of authorship or study prevalence."}
+        pending = result_path.with_suffix(".json.tmp")
+        pending.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(pending, result_path)
     return summary

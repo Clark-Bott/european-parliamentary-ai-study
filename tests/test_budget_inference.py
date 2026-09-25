@@ -147,47 +147,126 @@ class SampleTests(unittest.TestCase):
 
 
 class PaidSmokeTests(unittest.TestCase):
-    def test_one_synthetic_task_with_fake_client_and_no_research_outputs(self):
+    def test_real_corpus_selection_and_fake_client_report(self):
         calls = []
+        source_texts = {record["speech_text"] for record in fixture()}
 
         class FakeClient:
             def __init__(self, api_key, *, model):
                 calls.append(("init", model))
+                self.model = model
             def available_models(self):
                 calls.append(("models",))
                 return ["pangram-4"]
             def analyze(self, text, cache, *, allow_paid):
-                self_text = text
-                calls.append(("task", len(self_text.split()), allow_paid))
-                self_test.assertIn("not a parliamentary", self_text)
-                return {"stage": "STAGE_SUCCESS", "fraction_ai": 0.0,
-                        "fraction_ai_assisted": 0.0, "fraction_human": 1.0}
+                calls.append(("task", len(text.split()), allow_paid))
+                self_test.assertTrue(40 <= len(text.split()) <= 100)
+                self_test.assertIn(text, source_texts)
+                fingerprint = request_fingerprint(text, {"model": self.model,
+                                                        "public_dashboard_link": False})
+                if cache.load(fingerprint) is not None:
+                    return cache.load(fingerprint)
+                result = {"stage": "STAGE_SUCCESS", "fraction_ai": 0.3,
+                          "fraction_ai_assisted": 0.2, "fraction_human": 0.5}
+                cache.store(fingerprint, result)
+                return result
 
         self_test = self
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            corpus = root / "all.jsonl"
+            write_jsonl(corpus, fixture())
+            gap = root / "gaps.json"
+            gap.write_text("[]\n")
+            approval = root / "approval.json"
+            approval.write_text(json.dumps({
+                "approved": True, "approved_by": "Synthetic fixture test",
+                "approved_at_utc": "2026-09-25T00:00:00Z", "scope": "synthetic fixture",
+                "source_terms_reviewed": True, "processor_terms_reviewed": True,
+                "international_transfer_reviewed": True}))
+            options = dict(corpus=corpus, results_dir=root, model="pangram-4",
+                           api_key="fake", confirm_paid_run=True,
+                           price_per_1000_words=0.5, gap_reports=gap,
+                           processing_approval=approval)
             with patch("parliament_ai_study.pipeline.PangramClient", FakeClient):
                 with self.assertRaisesRegex(PermissionError, "confirm-paid-run"):
-                    run_api_test(results_dir=root, model="pangram-4", api_key="fake",
-                                 confirm_paid_run=False, price_per_1000_words=0.5)
-                with self.assertRaisesRegex(PermissionError, "exceeds the test cap"):
-                    run_api_test(results_dir=root, model="pangram-4", api_key="fake",
-                                 confirm_paid_run=True, price_per_1000_words=0.5, max_cost=0.01)
+                    run_api_test(**{**options, "confirm_paid_run": False})
+                with self.assertRaisesRegex(PermissionError, "exceed the test cap"):
+                    run_api_test(**options, max_cost=0.01)
+                with self.assertRaisesRegex(PermissionError, "exceed the test cap"):
+                    run_api_test(**options, test_count=2)
                 self.assertEqual(calls, [])
-                summary = run_api_test(results_dir=root, model="pangram-4", api_key="fake",
-                                       confirm_paid_run=True, price_per_1000_words=0.5)
+                summary = run_api_test(**options)
+                two = run_api_test(**{**options, "results_dir": root / "two"},
+                                   test_count=2, max_cost=0.10)
             self.assertEqual(summary["billing_units"], 1)
-            self.assertEqual([c[0] for c in calls], ["init", "models", "task"])
+            self.assertEqual(two["billing_units"], 2)
+            self.assertEqual(len(two["completed_speeches"]), 2)
+            self.assertEqual(len({row["speech_id"] for row in two["completed_speeches"]}), 2)
+            self.assertEqual([c[0] for c in calls], ["init", "models", "task", "init", "models", "task", "task"])
             self.assertEqual((root / "api_test/test_result.json").exists(), True)
+            self.assertEqual(summary["completed_speeches"][0]["ai_only_share"], 0.3)
+            self.assertEqual(summary["completed_speeches"][0]["ai_assisted_share"], 0.2)
+            self.assertEqual(summary["completed_speeches"][0]["country"] in
+                             ("Germany", "France", "Netherlands", "Italy", "Spain", "Poland"), True)
+            self.assertNotIn("speech_text", (root / "api_test/test_result.json").read_text())
             self.assertFalse((root / "tables").exists())
+            changed = root / "changed.jsonl"
+            write_jsonl(changed, list(iter_jsonl(corpus)) + [{"country": "Germany", "date": "2024-01-01",
+                         "speech_id": "new", "speech_text": "something " * 50,
+                         "word_count": 50, "source_identifier": "new",
+                         "source_url": "https://example.invalid/new"}])
+            with self.assertRaisesRegex(ValueError, "existing API test selection differs"):
+                run_api_test(**{**options, "corpus": changed})
 
-    def test_cli_test_does_not_try_to_build_missing_corpus(self):
+    def test_paid_api_test_keeps_full_coverage_gap_and_approval_guards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            corpus = root / "single.jsonl"
+            write_jsonl(corpus, fixture()[:1])
+            options = dict(corpus=corpus, results_dir=root, model="pangram-4", api_key="fake",
+                           confirm_paid_run=True, price_per_1000_words=0.5,
+                           gap_reports=root / "gaps.json", processing_approval=root / "approval.json")
+            with patch("parliament_ai_study.pipeline.PangramClient", side_effect=AssertionError("network")):
+                with self.assertRaisesRegex(ValueError, "country/year coverage"):
+                    run_api_test(**options)
+                write_jsonl(corpus, fixture())
+                with self.assertRaisesRegex(ValueError, "source-gap report is missing"):
+                    run_api_test(**options)
+                (root / "gaps.json").write_text('[{"missing": true}]')
+                with self.assertRaisesRegex(ValueError, "unresolved official source gaps"):
+                    run_api_test(**options)
+                (root / "gaps.json").write_text("[]\n")
+                with self.assertRaisesRegex(PermissionError, "requires an approval record"):
+                    run_api_test(**options)
+            self.assertFalse((root / "api_test").exists())
+
+    def test_cli_test_does_not_build_missing_corpus(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch("parliament_ai_study.run_experiment.build_six_country_corpus", side_effect=AssertionError("build")):
-                with patch("parliament_ai_study.run_experiment.run_api_test", return_value={
-                    "stage": "STAGE_SUCCESS", "estimated_max_cost_usd": 0.05}):
-                    self.assertEqual(main(["--test-api", "--confirm-paid-run", "--corpus",
-                                           str(Path(directory) / "missing.jsonl")]), 0)
+                with patch("parliament_ai_study.run_experiment.load_dotenv", return_value=None):
+                    with self.assertRaisesRegex(FileNotFoundError, "test corpus not found"):
+                        main(["--test-api", "--confirm-paid-run", "--corpus",
+                              str(Path(directory) / "missing.jsonl")])
+
+    def test_cli_forwards_country_count_and_full_guard_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            corpus = Path(directory) / "fixture.jsonl"
+            summary = {"completed_speeches": [{"country": "France", "date": "2024-01-01",
+                        "speech_id": "example", "ai_only_share": 0.3, "ai_assisted_share": 0.1}],
+                       "estimated_max_cost_usd": 0.10}
+            with patch("parliament_ai_study.run_experiment.load_dotenv", return_value=None):
+                with patch("parliament_ai_study.run_experiment.build_six_country_corpus",
+                           side_effect=AssertionError("build")):
+                    with patch("parliament_ai_study.run_experiment.run_api_test",
+                               return_value=summary) as test:
+                        self.assertEqual(main(["--test-api", "--confirm-paid-run", "--corpus",
+                                               str(corpus), "--test-count", "2", "--test-country",
+                                               "France", "--max-cost", "0.10"]), 0)
+                        self.assertEqual(test.call_args.kwargs["corpus"], corpus)
+                        self.assertEqual(test.call_args.kwargs["test_count"], 2)
+                        self.assertEqual(test.call_args.kwargs["test_country"], "France")
+                        self.assertEqual(test.call_args.kwargs["max_cost"], 0.10)
 
 
 if __name__ == "__main__":

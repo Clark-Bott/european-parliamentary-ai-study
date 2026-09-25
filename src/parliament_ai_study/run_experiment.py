@@ -10,6 +10,7 @@ import sys
 from .cost import estimate_cost
 from .io import iter_jsonl
 from .pipeline import run_api_test, run_pipeline
+from .qa import COUNTRIES
 from .sources.build import build_six_country_corpus
 
 
@@ -29,7 +30,9 @@ def load_dotenv(path: Path = Path(".env")) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="European parliamentary AI-writing study pipeline")
     parser.add_argument("--dry-run", action="store_true", help="run the full pipeline with deterministic mock results; never call Pangram")
-    parser.add_argument("--test-api", action="store_true", help="one short synthetic paid API task only; no parliamentary data or plots")
+    parser.add_argument("--test-api", action="store_true", help="classify 1–3 short real corpus speeches; all full-corpus paid guards apply")
+    parser.add_argument("--test-count", type=int, default=1, help="number of short corpus speeches for --test-api (1–3; default 1)")
+    parser.add_argument("--test-country", choices=COUNTRIES, help="restrict --test-api examples to one country")
     parser.add_argument("--corpus", type=Path, default=Path("data/processed/speeches.jsonl"))
     parser.add_argument("--results-dir", type=Path, default=Path("results"))
     parser.add_argument("--model", default=None, help="explicit Pangram model selector; defaults to PANGRAM_MODEL or pangram-4")
@@ -70,15 +73,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.test_api:
         if args.dry_run or args.estimate_only or args.build_corpus or args.sample_budget is not None:
             raise SystemExit("--test-api cannot be combined with dry-run, estimate-only, build-corpus or sampling")
-        summary = run_api_test(results_dir=args.results_dir, model=model,
+        summary = run_api_test(corpus=args.corpus, results_dir=args.results_dir, model=model,
                                api_key=os.environ.get("PANGRAM_API_KEY"),
                                confirm_paid_run=args.confirm_paid_run,
                                price_per_1000_words=price,
-                               max_cost=0.05 if args.max_cost is None else args.max_cost)
-        print(f"Synthetic API check completed: {summary['stage']}; not research data. "
-              f"Estimated ceiling ${summary['estimated_max_cost_usd']:.4f}; "
+                               max_cost=0.05 if args.max_cost is None else args.max_cost,
+                               test_count=args.test_count, test_country=args.test_country,
+                               gap_reports=args.gap_report,
+                               processing_approval=args.processing_approval)
+        print(f"Corpus API diagnostic completed; {len(summary['completed_speeches'])} short speech(es). "
+              f"Estimated cost ${summary['estimated_max_cost_usd']:.4f}; "
               f"record at {args.results_dir / 'api_test' / 'test_result.json'}")
+        for row in summary["completed_speeches"]:
+            print(f"{row['country']} {row['date']} {row['speech_id']}: "
+                  f"AI-only {row['ai_only_share']:.1%}; AI-assisted {row['ai_assisted_share']:.1%}")
+        print("Diagnostic only: short-text detector labels are not proof of authorship or study prevalence.")
         return 0
+    if args.test_count != 1 or args.test_country is not None:
+        raise SystemExit("--test-count and --test-country require --test-api")
     if args.dry_run and args.confirm_paid_run:
         raise SystemExit("--dry-run and --confirm-paid-run cannot be combined")
     if args.estimate_only and args.sample_budget is not None:
