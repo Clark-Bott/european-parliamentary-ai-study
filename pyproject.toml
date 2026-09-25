@@ -7,7 +7,10 @@ name = "european-parliamentary-ai-study"
 version = "0.1.0"
 description = "Reproducible multilingual parliamentary AI-writing study"
 requires-python = ">=3.11"
-dependencies = ["pypdf==6.1.1"]
+dependencies = [
+    "pypdf==6.1.1",
+    "rich>=14,<15",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -20,6 +20,7 @@ from unittest.mock import patch
 from parliament_ai_study.sources.sejm import (audit_sejm_raw_coverage, build_sejm_corpus,
                                                 download_sejm_date, iter_sejm_speeches,
                                                 parse_sejm_statement)
+from parliament_ai_study.sources.monitor_sejm import CorpusTail, _last_day_bodies, target_days
 from parliament_ai_study.sources.spain import (_has_journal, _html_full_text_available,
                                              parse_congreso_html, journal_url)
 from parliament_ai_study.sources.spain_pdf import _Chunk, _Line, parse_congreso_pdf
@@ -538,6 +539,45 @@ class NetherlandsParserTests(unittest.TestCase):
 
 
 class SejmParserTests(unittest.TestCase):
+    def test_monitor_counts_only_complete_lines_and_survives_final_promotion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            partial = Path(directory) / "poland.jsonl.tmp"
+            final = Path(directory) / "poland.jsonl"
+            tail = CorpusTail()
+            partial.write_bytes(b'{"speech_id":"sejm-term9-proceeding2-2023-01-12-statement1"}\n'
+                                b'{"speech_id":"sejm-term9-proceeding2-2023-01-12-stat')
+            tail.update(partial)
+            self.assertEqual(tail.records, 1)
+            self.assertTrue(tail.last_id.endswith("statement1"))
+            with partial.open("ab") as stream:
+                stream.write(b'ement2"}\n')
+            tail.update(partial)
+            self.assertEqual(tail.records, 2)
+            self.assertTrue(tail.last_id.endswith("statement2"))
+            partial.rename(final)
+            tail.update(final)
+            self.assertEqual(tail.records, 2)
+
+    def test_monitor_denominator_ignores_scheduled_sittings(self):
+        from datetime import date
+
+        index = [{"number": 1, "dates": ["2017-01-01", "2024-01-01", "2024-01-04"]},
+                 {"number": 0, "dates": ["2024-01-02"]}]
+        self.assertEqual(target_days(index, date(2024, 1, 2)), [(1, "2024-01-01")])
+
+    def test_monitor_labels_body_cache_separately_from_parsed_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            day = root / "term-9/proceeding-2/2023-01-12"
+            day.mkdir(parents=True)
+            (day / "statements.json").write_text(json.dumps({"statements": [
+                {"num": 1, "unspoken": False}, {"num": 2, "unspoken": False},
+                {"num": 3, "unspoken": True}]}), encoding="utf-8")
+            (day / "statement-1.html").write_text("<p>One</p>", encoding="utf-8")
+            self.assertEqual(_last_day_bodies(
+                root, "sejm-term9-proceeding2-2023-01-12-statement1"),
+                "2023-01-12 (term 9): 1/2 bodies cached")
+
     def test_sejm_acquisition_rejects_future_cutoff(self):
         with self.assertRaisesRegex(ValueError, "in the future"):
             list(iter_sejm_speeches(through_date="2099-01-01"))

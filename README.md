@@ -50,6 +50,14 @@ uv pip install --python .venv/bin/python -e .
 
 The default dry run is deterministic and never contacts Pangram. With no combined corpus present, it creates an explicitly synthetic six-country test fixture and exercises QA, cost estimation, aggregation, CSV tables, SVG figures, machine-readable mock results, and a report under `results/`. **This is a software smoke test, not an end-to-end run on six real corpora.** An explicitly supplied `--corpus` path must exist; a typo will not silently use a synthetic fixture. To acquire every official corpus before a real-corpus dry run, use `./run_experiment.sh --build-corpus --dry-run`. This can download many files and may take a long time. To acquire without analysis, use `uv run --python 3.12 python -m parliament_ai_study.sources.build` after installation. Individual adapters: `uv run --python 3.12 python -m parliament_ai_study.sources.cli Germany` (also France, Netherlands, Italy, Spain, Poland). After all acquisition processes stop, reconcile checksums and inferred source URLs with `uv run --python 3.12 python -m parliament_ai_study.provenance --resolve-germany`; unresolved URLs are reported rather than guessed.
 
+To watch an existing Polish acquisition **without starting a second downloader**, run this in another terminal from the repository root (Ctrl+C closes the display):
+
+```bash
+uv run --python 3.12 python -m parliament_ai_study.sources.monitor_sejm
+```
+
+Add `--once` for a single snapshot or `--offline` to avoid fetching a missing sitting-day index from the public Sejm API. The Rich bars count cached **sitting-day metadata**, not completed speeches or validated coverage; the display separately shows flushed records, the latest record, and bodies cached for its day. The monitor does not change the partial corpus or provenance manifest. The current acquisition was started before the future-date cutoff fix and may stop at a scheduled sitting; if so, resume it with the documented `--resume-partial --through-date 2026-09-25` flags after the old writer stops.
+
 Run tests with:
 
 ```bash
